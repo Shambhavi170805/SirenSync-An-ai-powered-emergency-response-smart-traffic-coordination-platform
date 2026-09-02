@@ -1,0 +1,2 @@
+# SirenSync-An-ai-powered-emergency-response-smart-traffic-coordination-platform
+An AI-powered emergency healthcare platform connecting patient symptoms to the right ambulance and best-fit hospital, rather than just the nearest one. It also uses traffic and signal awareness to suggest optimized routes and demonstrate how AI-based traffic coordination can reduce ambulance transit time and improve emergency response.
