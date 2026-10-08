@@ -67,8 +67,12 @@ class HospitalRankingEngine:
                 s_dist = max(0.0, 1.0 - (dist_km / settings.MAX_RANKING_RADIUS_KM))
 
             # 2. Capability Matching
+            CAPABILITY_ALIASES = {
+                "TRAUMA_CENTER": "TRAUMA_LEVEL_1",
+                "PEDIATRIC_ICU": "PEDIATRIC_EMERGENCY",
+            }
             hospital_caps = {c.capability_code for c in hospital.capabilities}
-            req_caps = set(request.requiredCapabilities)
+            req_caps = {CAPABILITY_ALIASES.get(c, c) for c in request.requiredCapabilities}
 
             if req_caps:
                 matched_caps = sorted(list(req_caps.intersection(hospital_caps)))
@@ -189,6 +193,7 @@ class HospitalRankingEngine:
 
         return RankedHospitalsResponse(
             emergencyId=request.emergencyId,
+            requiredCapabilities=request.requiredCapabilities,
             rankedHospitals=evaluated_items,
             weightsApplied={
                 "distance": w_dist,

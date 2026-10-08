@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Optional, Tuple, Dict
+from typing import Optional, Tuple, Dict, List
 from sqlalchemy.orm import Session
 from sqlalchemy import update, select
 from backend.models.bed import Bed
@@ -21,6 +21,10 @@ class BedReservationConflictException(Exception):
 
 class HospitalNotFoundException(Exception):
     """Raised when the specified hospital does not exist."""
+    pass
+
+class BedNotFoundException(Exception):
+    """Raised when a specific bed does not exist in the hospital."""
     pass
 
 class BedManagementService:
@@ -248,3 +252,70 @@ class BedManagementService:
             occupied_beds=occupied,
             by_category=by_cat
         )
+
+    @staticmethod
+    def update_bed_status(
+        db: Session,
+        hospital_id: str,
+        bed_id: str,
+        new_status: BedStatusEnum
+    ) -> Bed:
+        """
+        Updates bed status for hospital resource management operations.
+        Ensures bed exists and belongs to the specified hospital.
+        """
+        bed = (
+            db.query(Bed)
+            .filter(Bed.id == bed_id, Bed.hospital_id == hospital_id)
+            .first()
+        )
+        if not bed:
+            raise BedNotFoundException(f"Bed '{bed_id}' not found in hospital '{hospital_id}'.")
+        
+        bed.status = new_status
+        bed.version = Bed.version + 1
+        bed.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(bed)
+        return bed
+
+    @staticmethod
+    def get_hospital_reservations(db: Session, hospital_id: str):
+        """
+        Returns all reservations associated with a hospital, with bed details.
+        """
+        hospital = db.query(Hospital).filter(Hospital.id == hospital_id).first()
+        if not hospital:
+            raise HospitalNotFoundException(f"Hospital '{hospital_id}' not found.")
+
+        reservations = (
+            db.query(BedReservation)
+            .filter(BedReservation.hospital_id == hospital_id)
+            .order_by(BedReservation.reserved_at.desc())
+            .all()
+        )
+        return reservations
+
+    @staticmethod
+    def get_hospital_queue(db: Session, hospital_id: str):
+        """
+        Returns all queue items for a hospital ordered by priority (P1 first) and created_at.
+        """
+        hospital = db.query(Hospital).filter(Hospital.id == hospital_id).first()
+        if not hospital:
+            raise HospitalNotFoundException(f"Hospital '{hospital_id}' not found.")
+
+        items = (
+            db.query(HospitalQueueItem)
+            .filter(HospitalQueueItem.hospital_id == hospital_id)
+            .order_by(HospitalQueueItem.created_at.desc())
+            .all()
+        )
+        priority_order = {
+            PriorityEnum.P1_CRITICAL: 1,
+            PriorityEnum.P2_EMERGENCY: 2,
+            PriorityEnum.P3_URGENT: 3,
+            PriorityEnum.P4_NON_URGENT: 4
+        }
+        return sorted(items, key=lambda x: priority_order.get(x.priority, 5))
+

@@ -7,6 +7,7 @@ from backend.schemas.bed import (
     BedResponse,
     BedCategoryCount,
     HospitalBedSummaryResponse,
+    BedStatusUpdateRequest,
 )
 from backend.schemas.ranking import (
     RankingRequest,
@@ -19,12 +20,15 @@ from backend.schemas.reservation import (
     BedReservationDetail,
     CoordinatingHospitalInfo,
     HospitalSelectionResponse,
+    HospitalReservationItemResponse,
 )
 from backend.schemas.reassignment import (
     ReassignmentEvaluationRequest,
     ReassignmentEvaluationResponse,
     ReassignmentAuditResponse,
 )
+from backend.schemas.queue import HospitalQueueResponse
+from backend.schemas.dashboard import HospitalDashboardOverviewResponse
 
 __all__ = [
     "HospitalCapabilityResponse",
@@ -33,6 +37,7 @@ __all__ = [
     "BedResponse",
     "BedCategoryCount",
     "HospitalBedSummaryResponse",
+    "BedStatusUpdateRequest",
     "RankingRequest",
     "RankingBreakdown",
     "RankedHospitalItem",
@@ -41,7 +46,10 @@ __all__ = [
     "BedReservationDetail",
     "CoordinatingHospitalInfo",
     "HospitalSelectionResponse",
+    "HospitalReservationItemResponse",
     "ReassignmentEvaluationRequest",
     "ReassignmentEvaluationResponse",
     "ReassignmentAuditResponse",
+    "HospitalQueueResponse",
+    "HospitalDashboardOverviewResponse",
 ]

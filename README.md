@@ -15,9 +15,9 @@ An AI-powered emergency healthcare platform connecting patient symptoms to the r
 
 ---
 
-## Hospital Intelligence + Bed Management Subsystem (Milestone 1)
+## Hospital Intelligence + Bed Management Subsystem (Milestones 1 & 2)
 
-This subsystem provides the core coordinating backend for SirenSync:
+This subsystem provides the complete coordinating backend and operational intelligence dashboard for SirenSync:
 
 1. **Deterministic 4-Factor Hospital Ranking Engine:**
    - **Distance:** Great-circle Haversine proximity.
@@ -36,6 +36,12 @@ This subsystem provides the core coordinating backend for SirenSync:
    - *Prototype Policy Notice:* The 40% route-progress threshold is a configurable prototype heuristic for demonstration; it does not constitute a clinical or medical protocol.
    - Emits a standardized `BED_REASSIGNMENT_REROUTE` machine-readable event for Nidhi's ambulance module.
 
+4. **Hospital Operations Dashboard (Milestone 2):**
+   - Zero-build modern web interface served directly via FastAPI at `/dashboard`.
+   - Real-time KPI summaries, interactive bed matrix with status toggles ("Mark Occupied" / "Discharge").
+   - Live inbound emergency priority queue (`P1` to `P4`) with route progress tracking.
+   - Evaluator testbeds for 4-factor ranking and 1-click reassignment scenario triggers (Scenarios C & D).
+
 ---
 
 ## Quickstart & Setup
@@ -50,15 +56,16 @@ pip install -r requirements.txt
 ```
 
 ### 3. Initialize & Seed Database
-Seeds 5 Bengaluru hospitals (Manipal, Apollo, Fortis, Columbia Asia, Bowring) with realistic capabilities, beds, and coordinates:
+Seeds 5 Bengaluru hospitals (Manipal, Apollo, Fortis, Columbia Asia, Bowring) with realistic capabilities, beds, queue items, and coordinates:
 ```bash
 python -m seed.demo_seed_data
 ```
 
-### 4. Run the API Server
+### 4. Run the Application
 ```bash
 python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000 --reload
 ```
+- **Hospital Operations Dashboard:** [http://localhost:8000/dashboard](http://localhost:8000/dashboard)
 - Interactive Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 - System Status: [http://localhost:8000/](http://localhost:8000/)
 
@@ -66,7 +73,7 @@ python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000 --reload
 
 ## Running the Automated Test Suite
 
-Run the full suite of unit, integration, and multi-threaded concurrency tests:
+Run the full suite of 22 unit, integration, dashboard, and multi-threaded concurrency tests:
 ```bash
 python -m pytest -v
 ```
@@ -76,6 +83,7 @@ python -m pytest -v
 - `tests/test_bed_concurrency.py`: 10-thread concurrent race condition test demonstrating that when 10 threads compete for 1 bed, exactly 1 wins and 9 fail cleanly with 409 Conflict.
 - `tests/test_reassignment_policy.py`: Verifies reassignment triggers at 25% progress (< 40%) and rejects at 65% progress (>= 40%).
 - `tests/test_api_integration.py`: End-to-end API walkthrough (Directory &rarr; Ranking &rarr; Hospital Selection &rarr; Bed Lock &rarr; Audit).
+- `tests/test_dashboard_api.py`: Tests dashboard aggregation, inbound queue, reservations ledger, and bed status transitions.
 
 ---
 
@@ -92,6 +100,7 @@ python -m pytest -v
 
 ## Documentation Links
 
+- [Hospital Operations Dashboard User Guide & Evaluator Script](file:///docs/DASHBOARD_GUIDE.md)
 - [System Architecture & Concurrency Design](file:///docs/ARCHITECTURE.md)
 - [Deterministic 4-Factor Ranking Algorithm](file:///docs/RANKING_ALGORITHM.md)
 - [Cross-Module Integration Contracts & API Guide](file:///docs/INTEGRATION_CONTRACTS.md)

@@ -26,3 +26,7 @@ class HospitalBedSummaryResponse(BaseModel):
     reserved_beds: int
     occupied_beds: int
     by_category: Dict[str, BedCategoryCount]
+
+class BedStatusUpdateRequest(BaseModel):
+    status: BedStatusEnum
+

@@ -12,6 +12,7 @@ from backend.models.bed import Bed
 from backend.models.emergency import Emergency
 from backend.models.reservation import BedReservation
 from backend.models.queue import HospitalQueueItem
+from backend.models.audit import ReassignmentAuditLog
 from backend.models.enums import BedTypeEnum, BedStatusEnum, PriorityEnum, ReservationStatusEnum, QueueStatusEnum
 
 HOSPITALS_DATA = [
@@ -133,6 +134,7 @@ def seed_database(db: Session = None):
 
     try:
         # Clear existing data in reverse order of foreign keys
+        db.query(ReassignmentAuditLog).delete()
         db.query(BedReservation).delete()
         db.query(HospitalQueueItem).delete()
         db.query(Emergency).delete()
@@ -183,8 +185,9 @@ def seed_database(db: Session = None):
                     total_beds_created += 1
 
                 for _ in range(counts["reserved"]):
+                    bed_id = f"bed-{hospital.id}-{btype.value[:3].lower()}-{bed_index:02d}"
                     bed = Bed(
-                        id=f"bed-{hospital.id}-{btype.value[:3].lower()}-{bed_index:02d}",
+                        id=bed_id,
                         hospital_id=hospital.id,
                         bed_number=f"{btype.value[:3]}-{bed_index:02d}",
                         bed_type=btype,
@@ -192,6 +195,48 @@ def seed_database(db: Session = None):
                         department=f"{btype.value} Department"
                     )
                     db.add(bed)
+                    db.flush()
+
+                    # Create matching Emergency, BedReservation and Queue item
+                    emg_id = f"emg-{hospital.id}-{bed_index:02d}"
+                    priority_choice = PriorityEnum.P1_CRITICAL if bed_index % 3 == 0 else (PriorityEnum.P2_EMERGENCY if bed_index % 2 == 0 else PriorityEnum.P3_URGENT)
+                    route_pct = 25.0 if bed_index % 2 == 0 else 60.0
+
+                    emergency = Emergency(
+                        id=emg_id,
+                        patient_id=f"pat-{hospital.id}-{bed_index:02d}",
+                        emergency_type="ACUTE_CARDIO_RESPIRATORY" if btype == BedTypeEnum.ICU else "EMERGENCY_TRAUMA",
+                        priority=priority_choice,
+                        patient_latitude=hospital.latitude + 0.015,
+                        patient_longitude=hospital.longitude + 0.012,
+                        patient_address="En route from transit sector",
+                        required_bed_type=btype,
+                        selected_hospital_id=hospital.id
+                    )
+                    db.add(emergency)
+                    db.flush()
+
+                    reservation = BedReservation(
+                        id=f"res-{hospital.id}-{bed_index:02d}",
+                        emergency_id=emg_id,
+                        hospital_id=hospital.id,
+                        bed_id=bed_id,
+                        status=ReservationStatusEnum.RESERVED,
+                        reserved_at=datetime.utcnow()
+                    )
+                    db.add(reservation)
+
+                    queue_item = HospitalQueueItem(
+                        id=f"qitem-{hospital.id}-{bed_index:02d}",
+                        hospital_id=hospital.id,
+                        emergency_id=emg_id,
+                        priority=priority_choice,
+                        status=QueueStatusEnum.EN_ROUTE,
+                        route_progress=route_pct,
+                        notes=f"Inbound transit for bed {bed.bed_number}"
+                    )
+                    db.add(queue_item)
+
                     bed_index += 1
                     total_beds_created += 1
 
@@ -208,8 +253,47 @@ def seed_database(db: Session = None):
                     bed_index += 1
                     total_beds_created += 1
 
+        # Seed sample ReassignmentAuditLog records for prototype policy demonstration
+        audit_sample_1 = ReassignmentAuditLog(
+            id="audit-sample-01",
+            event_id="evt-reassign-demo-01",
+            displaced_emergency_id="emg-hosp-m-02",
+            displacing_emergency_id="emg-demo-p1-99",
+            displaced_priority=PriorityEnum.P3_URGENT,
+            displacing_priority=PriorityEnum.P1_CRITICAL,
+            previous_hospital_id="hosp-manipal-hal",
+            previous_bed_id="bed-hosp-manipal-hal-icu-06",
+            new_hospital_id="hosp-apollo-bg",
+            new_bed_id="bed-hosp-apollo-bg-icu-01",
+            route_progress=26.5,
+            threshold=40.0,
+            decision="REASSIGNMENT_APPROVED",
+            reason="Priority escalation: P1_CRITICAL displaced P3_URGENT at 26.5% route progress (< 40.0% threshold).",
+            created_at=datetime.utcnow()
+        )
+        db.add(audit_sample_1)
+
+        audit_sample_2 = ReassignmentAuditLog(
+            id="audit-sample-02",
+            event_id="evt-reassign-demo-02",
+            displaced_emergency_id="emg-hosp-m-03",
+            displacing_emergency_id="emg-demo-p1-100",
+            displaced_priority=PriorityEnum.P3_URGENT,
+            displacing_priority=PriorityEnum.P1_CRITICAL,
+            previous_hospital_id="hosp-manipal-hal",
+            previous_bed_id="bed-hosp-manipal-hal-tra-07",
+            new_hospital_id=None,
+            new_bed_id=None,
+            route_progress=68.0,
+            threshold=40.0,
+            decision="REASSIGNMENT_REJECTED",
+            reason="Active reservation retained: ambulance has covered 68.0% of route (>= configurable prototype threshold of 40.0%).",
+            created_at=datetime.utcnow()
+        )
+        db.add(audit_sample_2)
+
         db.commit()
-        print(f"Successfully seeded {len(HOSPITALS_DATA)} hospitals and {total_beds_created} beds.")
+        print(f"Successfully seeded {len(HOSPITALS_DATA)} hospitals and {total_beds_created} beds with linked reservations and queue items.")
 
     finally:
         if close_at_end:

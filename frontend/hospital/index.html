@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SirenSync — Hospital Operations & Bed Management</title>
+  
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN for Zero-Build Evaluator Convenience -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    /* Custom subtle scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="h-full text-slate-800 flex flex-col antialiased">
+
+  <!-- Header Root -->
+  <div id="header-root"></div>
+
+  <!-- Main Content Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    
+    <!-- Tab Navigation Bar -->
+    <div class="border-b border-slate-200">
+      <nav id="tab-navigation" class="-mb-px flex space-x-1 sm:space-x-4 overflow-x-auto scrollbar-none" aria-label="Tabs"></nav>
+    </div>
+
+    <!-- Active Tab Content Area -->
+    <section id="tab-content" class="min-h-[500px]"></section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <div>
+        <span class="font-bold text-slate-700">SirenSync Hospital Intelligence Platform</span> • Milestone 2 Subsystem
+      </div>
+      <div class="flex items-center space-x-4 text-[11px] text-slate-400">
+        <span>Owner: <strong class="text-slate-600">Samriddhi</strong></span>
+        <span>•</span>
+        <a href="/docs" target="_blank" class="text-rose-600 hover:underline">Interactive API Docs</a>
+        <span>•</span>
+        <span>Deterministic Mock Traffic Mode</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+  <!-- Application Entry Point -->
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>

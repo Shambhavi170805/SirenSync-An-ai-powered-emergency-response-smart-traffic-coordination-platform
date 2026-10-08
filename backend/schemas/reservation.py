@@ -32,3 +32,16 @@ class HospitalSelectionResponse(BaseModel):
     reservation: BedReservationDetail
     coordinatingHospital: CoordinatingHospitalInfo
     message: str = "Bed reserved securely. Hospital is now the coordinating authority."
+
+class HospitalReservationItemResponse(BaseModel):
+    reservationId: str
+    emergencyId: str
+    hospitalId: str
+    bedId: str
+    bedNumber: str
+    bedType: BedTypeEnum
+    status: ReservationStatusEnum
+    reservedAt: datetime
+    releasedAt: Optional[datetime] = None
+    reassignedToEmergencyId: Optional[str] = None
+

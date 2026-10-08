@@ -109,3 +109,25 @@ When a higher-priority emergency (`P1_CRITICAL`) contends for the only reserved 
    - Displaced patient retains the bed reservation to protect coordination stability.
    - Incoming emergency is routed to the next best eligible facility.
    - Decision is logged in `reassignment_audit_logs`.
+
+---
+
+## 6. Hospital Operations Dashboard Architecture (Milestone 2)
+
+### Zero-Build Web Architecture
+The dashboard (`frontend/hospital/`) provides a web interface for hospital staff and evaluators without requiring external node build steps:
+- **Serving Layer:** Mounted at `/dashboard` via FastAPI `StaticFiles(directory="frontend/hospital", html=True)`.
+- **Client Technology:** Native ES6+ modules and Tailwind CSS CDN.
+- **Auto-Refresh Engine:** Transparent 10-second polling (`setInterval`) clearly identified in the UI.
+
+### Dashboard Modules
+1. **Header & Hospital Directory:** Switch between 5 Bengaluru hospitals, viewing capabilities and operational status.
+2. **Operational Overview & KPI Summary:** Total capacity, available beds, reserved locks, occupied beds, and inbound queue count.
+3. **Interactive Bed Inventory Matrix:** Visual bed cards with category filters and real-time status management actions ("Mark Occupied" / "Discharge").
+4. **Emergency Priority Queue:** Live inbound queue displaying urgency levels (`P1` to `P4`) and route progress.
+5. **Reservations Ledger:** Live list of active and historical atomic bed reservations.
+6. **4-Factor Ranking Demonstrator:** Evaluator testbed with preset scenarios (e.g., Scenario A Cardiac) and transparent 4-factor scoring breakdown.
+7. **Reassignment Audit Explorer:** Evaluator testbed for 1-click execution of Scenario C (< 40%) and Scenario D (>= 40%), displaying emitted `BED_REASSIGNMENT_REROUTE` contracts.
+
+See [docs/DASHBOARD_GUIDE.md](file:///docs/DASHBOARD_GUIDE.md) for full operational and evaluator walkthrough instructions.
+

@@ -9,6 +9,7 @@ from backend.routers import (
     ranking_router,
     reservations_router,
     reassignment_router,
+    dashboard_router,
 )
 
 @asynccontextmanager
@@ -41,12 +42,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import os
+from fastapi.staticfiles import StaticFiles
+
 # Register routers under /api/v1 prefix
 app.include_router(hospitals_router, prefix=settings.API_V1_PREFIX)
 app.include_router(beds_router, prefix=settings.API_V1_PREFIX)
 app.include_router(ranking_router, prefix=settings.API_V1_PREFIX)
 app.include_router(reservations_router, prefix=settings.API_V1_PREFIX)
 app.include_router(reassignment_router, prefix=settings.API_V1_PREFIX)
+app.include_router(dashboard_router, prefix=settings.API_V1_PREFIX)
+
+# Mount Hospital Operations Dashboard UI
+frontend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "hospital")
+if os.path.exists(frontend_dir):
+    app.mount("/dashboard", StaticFiles(directory=frontend_dir, html=True), name="dashboard")
 
 @app.get("/", tags=["System Health"])
 def root():
@@ -56,6 +66,7 @@ def root():
         "owner": "Samriddhi",
         "version": settings.APP_VERSION,
         "status": "OPERATIONAL",
+        "dashboard": "/dashboard/",
         "documentation": "/docs",
         "apiPrefix": settings.API_V1_PREFIX,
         "policy": {
