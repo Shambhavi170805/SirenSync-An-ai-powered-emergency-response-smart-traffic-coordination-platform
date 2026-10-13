@@ -81,7 +81,7 @@ def vision_worker():
     while _running:
         # 1. Process camera streams with YOLO
         for cam in config.get("cameras", []):
-            cam_id = cam.get("id")
+            cam_id = cam.get("camera_id")
             j_id = cam.get("junction_id")
 
             raw = get_camera_frame(cam_id)
@@ -92,7 +92,11 @@ def vision_worker():
                 emit_event("AMBULANCE_DETECTED", {
                     "camera_id": cam_id,
                     "junction_id": j_id,
-                    "confidence": score
+                    "confidence": score,
+                    "method": "anpr",          # primary method; beacon/yolo also possible
+                    "plate": None,             # set by plates.py when a match is found
+                    "matched_plate": None,     # registry plate string
+                    "ambulance_id": None       # registry ambulance_id
                 })
                 trigger_green(j_id, f"AMB-{cam_id}", reason="CAMERA_CONFIRMED")
 
