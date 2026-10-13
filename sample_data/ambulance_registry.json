@@ -1,0 +1,7 @@
+{
+  "registry": [
+    {"plate": "KA01AB1234", "ambulance_id": "AMB001", "operator": "City EMS", "type": "ALS", "active": true},
+    {"plate": "DL05CD5678", "ambulance_id": "AMB002", "operator": "Metro Health", "type": "BLS", "active": true},
+    {"plate": "MH12EF9012", "ambulance_id": "AMB003", "operator": "State Ambulance", "type": "ALS", "active": false}
+  ]
+}

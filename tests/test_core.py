@@ -1,7 +1,9 @@
 """
-Core tests: verifies signal state transitions, 200m corridor trigger, and /health endpoint.
+Core tests: verifies signal state transitions, 200m corridor trigger, /health endpoint,
+and ANPR plate normalisation / fuzzy matching.
 """
 
+import pytest
 from fastapi.testclient import TestClient
 from ai_traffic.main import app
 from ai_traffic.route import calculate_distance_meters, set_active_route, update_ambulance_location
@@ -12,6 +14,7 @@ from ai_traffic.signals import (
     trigger_green,
     trigger_hold,
 )
+from ai_traffic.plates import normalise_plate, fuzzy_match, match_plate
 
 
 # Test 1: Signal state machine transitions (RED -> GREEN -> HOLD -> RED)
@@ -61,3 +64,44 @@ def test_health_endpoint():
         response = client.get("/health")
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
+
+
+# Test 4: Exact plate match in registry
+def test_anpr_exact_match():
+    registry = [{"plate": "KA01AB1234", "ambulance_id": "AMB001", "active": True}]
+    norm = normalise_plate("KA01AB1234")
+    result = match_plate(norm, registry)
+    assert result is not None
+    assert result["ambulance_id"] == "AMB001"
+
+
+# Test 5: OCR confusion fix — O read as 0 in digit position
+def test_anpr_ocr_o_confusion():
+    registry = [{"plate": "KA01AB1234", "ambulance_id": "AMB001", "active": True}]
+    # EasyOCR sometimes reads '0' as 'O'; normalise_plate or fuzzy_match should still find it
+    raw_from_ocr = "KAO1AB1234"
+    norm = normalise_plate(raw_from_ocr)
+    result = match_plate(norm, registry)
+    assert result is not None
+
+
+# Test 6: Wrong plate does not match
+def test_anpr_wrong_plate():
+    registry = [{"plate": "KA01AB1234", "ambulance_id": "AMB001", "active": True}]
+    norm = normalise_plate("MH12ZZ9999")
+    result = match_plate(norm, registry)
+    assert result is None
+
+
+# Test 7: Inactive ambulance is not matched
+def test_anpr_inactive_ambulance():
+    registry = [{"plate": "MH12EF9012", "ambulance_id": "AMB003", "active": False}]
+    norm = normalise_plate("MH12EF9012")
+    result = match_plate(norm, registry)
+    assert result is None
+
+
+# Test 8: Fuzzy match tolerates exactly 1 character difference
+def test_anpr_fuzzy_one_char():
+    assert fuzzy_match("KA01AB1234", "KA01AB1235") is True   # last digit differs
+    assert fuzzy_match("KA01AB1234", "KA01AB1299") is False  # two digits differ

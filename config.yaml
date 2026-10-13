@@ -26,6 +26,10 @@ detection:
     blue_hue_range: [100, 130]
     min_saturation: 120
     min_value: 140
+  # ANPR settings
+  anpr_consecutive_frames: 2   # frames with matching plate to confirm
+  only_dispatched_plate: true   # only allow plate of currently assigned ambulance
+  anpr_confidence_threshold: 0.60   # minimum OCR confidence to accept
 
 signals:
   # Signal state machine configuration
