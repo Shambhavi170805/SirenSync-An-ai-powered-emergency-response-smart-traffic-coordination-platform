@@ -89,6 +89,11 @@ export default function HospitalRecommendations({
             <span className="badge badge-info">
               {activeEmergency?.emergencyType || 'Cardiac Emergency'}
             </span>
+            {activeEmergency?.attachmentsCount > 0 && (
+              <span className="badge badge-success" style={{ fontSize: '0.75rem', padding: '2px 8px' }}>
+                📎 {activeEmergency.attachmentsCount} {activeEmergency.attachmentsCount === 1 ? 'Report' : 'Reports'} Attached
+              </span>
+            )}
           </div>
 
           <div style={{ fontSize: '0.85rem', color: '#64748b' }}>

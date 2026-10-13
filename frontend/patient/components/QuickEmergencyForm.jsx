@@ -18,9 +18,12 @@ import {
   ArrowRight,
   ShieldAlert,
   Loader2,
-  AlertTriangle
+  AlertTriangle,
+  Paperclip
 } from 'lucide-react';
 import { emergencyTypes, whoNeedsHelpOptions, patientConditionOptions } from '../data/mockData';
+import MedicalDocumentUpload from './MedicalDocumentUpload';
+import HumanVerification from './HumanVerification';
 
 export default function QuickEmergencyForm({ 
   patientProfile, 
@@ -46,6 +49,14 @@ export default function QuickEmergencyForm({
   const [showAdditionalInfo, setShowAdditionalInfo] = useState(false);
   const [additionalNotes, setAdditionalNotes] = useState('');
   const [selectedSymptoms, setSelectedSymptoms] = useState([]);
+
+  // Medical Document Attachments State
+  const [attachments, setAttachments] = useState([]);
+
+  // Human Verification State
+  const [verificationStatus, setVerificationStatus] = useState('unverified'); // 'unverified' | 'loading' | 'verified' | 'failed' | 'expired'
+  const [verificationToken, setVerificationToken] = useState(null);
+  const [verificationError, setVerificationError] = useState(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdRequest, setCreatedRequest] = useState(null);
@@ -125,8 +136,19 @@ export default function QuickEmergencyForm({
     }
   };
 
+  const handleVerificationStatusChange = (newStatus, token = null) => {
+    setVerificationStatus(newStatus);
+    setVerificationToken(token);
+    if (newStatus === 'verified') {
+      setVerificationError(null);
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
+
+    // Prevent duplicate submissions
+    if (isSubmitting) return;
 
     // Validation 1: Location required
     if (!location || location.trim() === '') {
@@ -141,6 +163,15 @@ export default function QuickEmergencyForm({
       return;
     }
     setContactError(null);
+
+    // Validation 3: Human Verification required for online submission
+    if (verificationStatus !== 'verified') {
+      setVerificationError(
+        'Please complete the human verification check below before submitting online, or call 112 directly for phone dispatch.'
+      );
+      return;
+    }
+    setVerificationError(null);
 
     setIsSubmitting(true);
 
@@ -165,6 +196,7 @@ export default function QuickEmergencyForm({
 
     const mockId = `EMG-2026-001`;
 
+    // Request payload including medical attachments & verification metadata
     const requestPayload = {
       requestId: mockId,
       patientName: whoNeedsHelp === 'me' ? (patientProfile?.name || 'Aarav Sharma') : 'Injured Patient (Reported by Bystander)',
@@ -177,6 +209,23 @@ export default function QuickEmergencyForm({
       patientCondition: patientCondition === 'conscious' ? 'Conscious' : (patientCondition === 'unconscious' ? 'Unconscious' : 'Not sure'),
       symptoms: combinedSymptoms,
       severity: derivedSeverity,
+      // Attached documents metadata (excluding raw binaries from high-level state, storing clean metadata)
+      attachments: attachments.map(f => ({
+        id: f.id,
+        name: f.name,
+        size: f.size,
+        formattedSize: f.formattedSize,
+        type: f.type,
+        isPdf: f.isPdf
+      })),
+      attachmentsCount: attachments.length,
+      // Verification metadata (never secret keys)
+      verification: {
+        status: verificationStatus,
+        provider: import.meta.env?.VITE_TURNSTILE_SITE_KEY ? 'cloudflare-turnstile' : 'dev-sandbox-simulator',
+        token: verificationToken || 'dev-token-simulated',
+        verifiedAt: new Date().toISOString()
+      },
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       status: "Emergency Request Created"
     };
@@ -227,6 +276,20 @@ export default function QuickEmergencyForm({
               <div className="summary-row">
                 <span className="summary-label">Patient Condition:</span>
                 <span className="summary-val">{createdRequest.patientCondition}</span>
+              </div>
+              <div className="summary-row">
+                <span className="summary-label">Medical Attachments:</span>
+                <span className="summary-val">
+                  {createdRequest.attachmentsCount > 0 
+                    ? `${createdRequest.attachmentsCount} file(s) attached (Local session)` 
+                    : 'None attached'}
+                </span>
+              </div>
+              <div className="summary-row">
+                <span className="summary-label">Verification:</span>
+                <span className="summary-val" style={{ color: '#059669', fontWeight: 800 }}>
+                  ✓ {createdRequest.verification.provider === 'cloudflare-turnstile' ? 'Cloudflare Turnstile Verified' : 'Dev Simulator Verified'}
+                </span>
               </div>
             </div>
 
@@ -543,6 +606,27 @@ export default function QuickEmergencyForm({
               />
             </div>
           )}
+        </div>
+
+        {/* ========================================================
+            7. OPTIONAL MEDICAL DOCUMENT ATTACHMENTS
+        ======================================================== */}
+        <div className="form-field-group">
+          <MedicalDocumentUpload
+            attachments={attachments}
+            onChangeAttachments={setAttachments}
+          />
+        </div>
+
+        {/* ========================================================
+            8. HUMAN VERIFICATION (COMPACT BOT PROTECTION)
+        ======================================================== */}
+        <div className="form-field-group">
+          <HumanVerification
+            verificationStatus={verificationStatus}
+            onStatusChange={handleVerificationStatusChange}
+            errorMessage={verificationError}
+          />
         </div>
 
         {/* Secondary Disclaimer & Safety Call */}
