@@ -48,11 +48,16 @@ def update_ambulance_location(current_lat: float, current_lng: float, progress_p
     _active_route["progress_percent"] = progress_percent
     amb_id = _active_route.get("ambulance_id", "AMBULANCE-1")
 
-    # Find next upcoming junction along route
+    # Find next upcoming junction along route.
+    # Accepts both "junction_id" (package config) and "id" (flat config) dict keys.
     for j in junctions_config:
-        j_id = j.get("id")
+        j_id = j.get("junction_id") or j.get("id")
+        if not j_id:
+            continue
         j_lat = j.get("lat")
         j_lng = j.get("lng")
+        if j_lat is None or j_lng is None:
+            continue
 
         dist = calculate_distance_meters(current_lat, current_lng, j_lat, j_lng)
 

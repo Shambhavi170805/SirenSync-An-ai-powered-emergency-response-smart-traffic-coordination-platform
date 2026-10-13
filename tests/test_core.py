@@ -4,7 +4,7 @@ Core tests: verifies signal state transitions, 200m corridor trigger, and /healt
 
 from fastapi.testclient import TestClient
 from ai_traffic.main import app
-from ai_traffic.route import calculate_distance_meters, update_ambulance_location
+from ai_traffic.route import calculate_distance_meters, set_active_route, update_ambulance_location
 from ai_traffic.signals import (
     get_junction_state,
     init_signals,
@@ -39,6 +39,9 @@ def test_signal_transitions():
 def test_200m_trigger():
     junctions = [{"id": "J-1", "lat": 12.9716, "lng": 77.5946}]
     init_signals(junctions)
+
+    # Set a route active for the ambulance so update_ambulance_location does not return early
+    set_active_route({"ambulance_id": "AMB-TEST-200M"})
 
     # Coords ~150 meters away
     amb_lat, amb_lng = 12.9705, 77.5940

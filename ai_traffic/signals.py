@@ -38,13 +38,16 @@ _junction_states = {}
 _controller = SimulatedSignalController()
 
 
-# Initializes junctions to RED
+# Initializes junctions to RED.
+# Accepts both "junction_id" (package/root config.yaml) and "id" (flat config.yaml) key names.
 def init_signals(junctions: List[dict], controller_type: str = "simulated"):
     global _controller, _junction_states
     _controller = RealSignalController() if controller_type == "real" else SimulatedSignalController()
     _junction_states = {}
     for j in junctions:
-        j_id = j.get("id")
+        j_id = j.get("junction_id") or j.get("id")
+        if not j_id:
+            continue  # Skip malformed entries rather than storing under None
         _junction_states[j_id] = {
             "state": "RED",
             "active_ambulance": None,
