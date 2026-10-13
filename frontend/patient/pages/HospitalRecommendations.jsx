@@ -92,7 +92,7 @@ export default function HospitalRecommendations({
           </div>
 
           <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
-            Patient: <strong>{activeEmergency?.patientName || 'Aarav Sharma'}</strong> ({activeEmergency?.age || 29} yrs) • Location: <strong>{activeEmergency?.currentLocation || 'Rajpur Road, Dehradun'}</strong>
+            Patient: <strong>{activeEmergency?.patientName || 'Aarav Sharma'}</strong> {activeEmergency?.patientCondition && <span>({activeEmergency.patientCondition})</span>} • Location: <strong>{activeEmergency?.currentLocation || 'Rajpur Road, Dehradun'}</strong>
           </div>
         </div>
 

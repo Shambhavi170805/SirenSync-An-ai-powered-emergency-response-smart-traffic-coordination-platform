@@ -64,6 +64,7 @@ export default function App() {
           <Dashboard
             patientProfile={patientProfile}
             activeEmergency={activeEmergency}
+            onSubmitEmergency={handleSubmitEmergency}
             onStartRequest={handleStartRequest}
             onQuickScenario={handleQuickScenario}
             onNavigate={setCurrentPage}

@@ -32,12 +32,22 @@ export const initialPatientProfile = {
 };
 
 export const emergencyTypes = [
-  { id: "cardiac", label: "Cardiac Emergency", icon: "Activity", priority: "critical", desc: "Severe chest pain, palpitations, or cardiac arrest" },
-  { id: "accident", label: "Road / Physical Accident", icon: "AlertTriangle", priority: "critical", desc: "Severe trauma, collision, fractures, or blunt impact" },
-  { id: "breathing", label: "Breathing Distress", icon: "Wind", priority: "high", desc: "Severe respiratory failure, asthma attack, or choking" },
-  { id: "injury", label: "Severe Bleeding / Injury", icon: "ShieldAlert", priority: "high", desc: "Deep lacerations, uncontained hemorrhaging, burns" },
-  { id: "stroke", label: "Neurological / Stroke", icon: "Brain", priority: "critical", desc: "Facial drooping, speech loss, acute seizure" },
-  { id: "other", label: "Other Medical Crisis", icon: "PlusCircle", priority: "moderate", desc: "Unspecified acute collapse, allergic anaphylaxis" }
+  { id: "accident", label: "Accident", icon: "Car", desc: "Vehicle crash, pedestrian collision, fall, injury" },
+  { id: "medical", label: "Medical Emergency", icon: "HeartPulse", desc: "Chest pain, stroke, seizure, severe symptoms" },
+  { id: "breathing", label: "Breathing Difficulty", icon: "Wind", desc: "Asthma, choking, severe breathlessness" },
+  { id: "unconscious", label: "Unconscious Person", icon: "AlertCircle", desc: "Fainted, unresponsive, coma" },
+  { id: "other", label: "Other", icon: "PlusCircle", desc: "Other acute emergency condition" }
+];
+
+export const whoNeedsHelpOptions = [
+  { id: "me", label: "Me", sublabel: "I am the injured patient" },
+  { id: "someone_else", label: "Someone else", sublabel: "Helping another person at the scene" }
+];
+
+export const patientConditionOptions = [
+  { id: "conscious", label: "Conscious", desc: "Alert or responding" },
+  { id: "unconscious", label: "Unconscious", desc: "Not responding to voice or touch" },
+  { id: "not_sure", label: "Not sure", desc: "Unable to determine safely" }
 ];
 
 export const severityLevels = [

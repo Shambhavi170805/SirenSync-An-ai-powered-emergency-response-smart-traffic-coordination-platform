@@ -1,13 +1,11 @@
 import React from 'react';
 import { 
   Siren, 
-  Activity, 
-  MapPin, 
-  FileText, 
-  Building2, 
-  CheckCircle2, 
+  Phone, 
   RotateCcw,
-  ShieldAlert
+  Activity,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 
 export default function Navbar({ 
@@ -17,100 +15,74 @@ export default function Navbar({
   onResetDemo 
 }) {
   return (
-    <header className="top-navbar">
+    <header className="top-navbar" role="banner">
       <div className="nav-inner">
-        {/* Brand */}
-        <div className="brand-wrapper" onClick={() => setCurrentPage('dashboard')}>
-          <div className="brand-icon-box">
-            <Siren size={24} />
+        {/* Brand & Connection Status */}
+        <div 
+          className="brand-wrapper" 
+          onClick={() => setCurrentPage('dashboard')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === 'Enter' && setCurrentPage('dashboard')}
+          aria-label="SirenSync Home"
+        >
+          <div className="brand-icon-box" aria-hidden="true">
+            <Siren size={22} />
           </div>
           <div className="brand-text">
-            <h1>
-              SirenSync
-              <span style={{ fontSize: '0.65rem', background: '#e0f2fe', color: '#0369a1', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
-                PHASE 2 PROTOTYPE
+            <div className="brand-title-row">
+              <span className="brand-name">SirenSync</span>
+              <span className="status-indicator-badge" title="Connection status">
+                <span className="status-dot-green" aria-hidden="true" />
+                <span>Online • Dehradun</span>
               </span>
-            </h1>
+            </div>
             <div className="brand-tagline">
-              AI-Powered Emergency Response & Smart Traffic Platform
+              Emergency Response Network
             </div>
           </div>
         </div>
 
-        {/* Navigation items */}
-        <nav className="nav-links">
-          <button 
-            className={`nav-btn ${currentPage === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setCurrentPage('dashboard')}
-          >
-            <Activity size={16} />
-            <span>Dashboard</span>
-          </button>
-
-          <button 
-            className={`nav-btn emergency-nav-btn ${currentPage === 'request' ? 'active' : ''}`}
-            onClick={() => setCurrentPage('request')}
-          >
-            <ShieldAlert size={16} />
-            <span>Request Assistance</span>
-          </button>
-
+        {/* Essential Secondary Actions (Minimal & Clutter-Free) */}
+        <div className="nav-actions">
+          {/* Active Emergency Status Jump-chip (Only shown if request active) */}
           {activeEmergency && (
-            <>
-              <button 
-                className={`nav-btn ${currentPage === 'recommendations' ? 'active' : ''}`}
-                onClick={() => setCurrentPage('recommendations')}
-              >
-                <Building2 size={16} />
-                <span>Hospitals</span>
-              </button>
-
-              {activeEmergency.selectedHospital && (
-                <>
-                  <button 
-                    className={`nav-btn ${currentPage === 'selected' ? 'active' : ''}`}
-                    onClick={() => setCurrentPage('selected')}
-                  >
-                    <CheckCircle2 size={16} />
-                    <span>Selection</span>
-                  </button>
-
-                  <button 
-                    className={`nav-btn ${currentPage === 'status' ? 'active' : ''}`}
-                    onClick={() => setCurrentPage('status')}
-                  >
-                    <div className="pulsing-dot" />
-                    <span>Status Tracker</span>
-                  </button>
-                </>
-              )}
-            </>
+            <button 
+              className="active-emergency-pill"
+              onClick={() => setCurrentPage(activeEmergency.selectedHospital ? 'status' : 'recommendations')}
+              title="Return to active emergency workflow"
+              aria-label={`View active emergency ${activeEmergency.requestId}`}
+            >
+              <span className="pulsing-dot" aria-hidden="true" />
+              <span className="pill-text">{activeEmergency.requestId}</span>
+            </button>
           )}
 
-          {/* Active emergency badge or ready status */}
-          {activeEmergency ? (
-            <div className="emergency-chip" title="Active emergency session">
-              <span className="pulsing-dot" />
-              <span>{activeEmergency.requestId}</span>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: '#059669', background: '#ecfdf5', padding: '4px 8px', borderRadius: '999px', border: '1px solid #a7f3d0', fontWeight: 600 }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} />
-              Dehradun EMS Ready
-            </div>
-          )}
+          {/* National Emergency Hotline: 112 */}
+          <a 
+            href="tel:112" 
+            className="btn-emergency-call"
+            aria-label="Direct call to National Emergency Services 112"
+            title="Immediate direct phone line to emergency services"
+          >
+            <Phone size={16} aria-hidden="true" />
+            <span className="call-text">
+              <span className="call-label">Direct Call</span>
+              <strong className="call-number">112</strong>
+            </span>
+          </a>
 
-          {/* Demo reset button */}
+          {/* Prototype Reset Button */}
           <button 
-            className="btn btn-secondary" 
-            style={{ padding: '0.35rem 0.65rem', fontSize: '0.75rem', gap: '4px' }}
+            className="btn-reset-demo" 
             onClick={onResetDemo}
             title="Reset demonstration state"
+            aria-label="Reset prototype to initial state"
           >
-            <RotateCcw size={13} />
-            Reset Demo
+            <RotateCcw size={14} aria-hidden="true" />
+            <span className="reset-label">Reset</span>
           </button>
-        </nav>
+        </div>
       </div>
     </header>
   );
