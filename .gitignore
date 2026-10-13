@@ -1,6 +1,29 @@
+
+# Frontend
 node_modules/
 dist/
+
+# macOS
 .DS_Store
+
+# Environment variables
 .env
 .env.*
 !.env.example
+
+# Python
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Database files
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Machine learning models
+*.pt

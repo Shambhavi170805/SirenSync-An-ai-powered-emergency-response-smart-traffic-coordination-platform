@@ -1,0 +1,17 @@
+# Ultralytics YOLOv10 Dataset Configuration for Ambulance Fine-Tuning
+# Compatible with Roboflow and Open Images V7 exports
+
+# Dataset root path (update this to your extracted dataset location)
+path: ./datasets/ambulance_dataset
+
+# Train, Validation, and Test split image directories
+train: images/train
+val: images/val
+test: images/test
+
+# Number of classes
+nc: 1
+
+# Class names dictionary
+names:
+  0: ambulance

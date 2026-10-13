@@ -1,0 +1,38 @@
+# Configuration for SirenSync AI-Traffic Module
+
+app:
+  name: "SirenSync Green Corridor"
+  port: 8000
+
+green_corridor:
+  trigger_distance_m: 200.0   # Ambulance within 200m turns signal green
+  hold_after_pass_s: 5.0      # Hold green for 5s after ambulance passes
+  amber_duration_s: 3.0       # Amber warning interval before returning to red
+  max_green_s: 60.0           # Safety timeout: revert to red after 60s max
+
+detection:
+  confirm_frames: 3           # Confirm detection after 3 consecutive frames
+  confidence_threshold: 0.50  # Minimum confidence score
+  weights_path: "yolov10n_ambulance.pt"
+
+cameras:
+  - id: "CAM-1"
+    junction_id: "J-1"
+    url: "demo"               # "demo" for built-in video generator, or "0" / "rtsp://..."
+    is_live: false
+
+  - id: "CAM-2"
+    junction_id: "J-2"
+    url: "demo"
+    is_live: false
+
+junctions:
+  - id: "J-1"
+    name: "Junction 1 - Main Cross"
+    lat: 12.9716
+    lng: 77.5946
+
+  - id: "J-2"
+    name: "Junction 2 - Hospital Gate"
+    lat: 12.9758
+    lng: 77.6012
