@@ -1,0 +1,10 @@
+{
+  "ambulance_id": "AMB-DEMO-01",
+  "junctions": ["J-1", "J-2"],
+  "progress_percent": 0.0,
+  "route_points": [
+    { "lat": 12.9660, "lng": 77.5880 },
+    { "lat": 12.9716, "lng": 77.5946 },
+    { "lat": 12.9758, "lng": 77.6012 }
+  ]
+}

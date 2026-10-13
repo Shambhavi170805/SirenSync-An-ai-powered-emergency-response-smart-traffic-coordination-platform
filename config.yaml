@@ -1,0 +1,101 @@
+# ==============================================================================
+# SirenSync AI-Traffic / Green Corridor Central Configuration
+# ==============================================================================
+
+app:
+  name: "SirenSync Green Corridor"
+  version: "1.0.0"
+  description: "AI-Powered Pre-emptive Emergency Signal Control"
+  environment: "development" # production | staging | development
+
+detection:
+  # YOLO Model variant: yolov10n, yolov10s, yolov8n
+  base_model: "yolov10n.pt"
+  custom_weights: "weights/yolov10n_ambulance.pt"
+  confidence_threshold: 0.50
+  iou_threshold: 0.45
+  img_size: 640
+  # Temporal smoothing: ambulance must be detected in N consecutive frames to confirm
+  temporal_smoothing_frames: 4
+  # Heuristic fallback settings (active when custom weights are absent)
+  heuristic:
+    vehicle_classes: [2, 5, 7] # COCO class IDs: 2=car, 5=bus, 7=truck
+    min_flashing_variance: 15.0 # Flashing light intensity variance
+    red_hue_range_1: [0, 10]
+    red_hue_range_2: [170, 180]
+    blue_hue_range: [100, 130]
+    min_saturation: 120
+    min_value: 140
+
+signals:
+  # Signal state machine configuration
+  safety_timeout_seconds: 45.0      # Maximum green pre-emption duration before auto-revert
+  hold_duration_seconds: 8.0         # Duration to hold green after vehicle clears trigger zone
+  preemption_lead_time_seconds: 25.0 # Seconds before ambulance arrival to turn signal GREEN
+  preemption_distance_meters: 350.0  # Radius from junction where route triggers pre-emption
+  yellow_clearance_seconds: 4.0      # Duration of yellow change interval
+
+conflict_resolution:
+  # Policy when two ambulances approach the same junction:
+  # "priority" (critical severity first), "eta" (closest first), or "fifo" (first to request)
+  strategy: "priority"
+  starvation_timeout_seconds: 60.0
+
+cameras:
+  - camera_id: "CAM-J1-NORTH"
+    name: "Junction 1 - North Approach"
+    junction_id: "J-101"
+    url: "demo" # "demo" triggers built-in synthetic generator; replace with "rtsp://..." or webcam index 0
+    is_simulated: true
+    reconnect_interval_seconds: 5.0
+    max_fps: 25
+    location:
+      lat: 12.97160
+      lng: 77.59460
+      address: "MG Road & Brigade Rd Intersection, North"
+
+  - camera_id: "CAM-J2-CENTRAL"
+    name: "Junction 2 - Central Corridor"
+    junction_id: "J-102"
+    url: "demo"
+    is_simulated: true
+    reconnect_interval_seconds: 5.0
+    max_fps: 25
+    location:
+      lat: 12.97580
+      lng: 77.60120
+      address: "Trinity Circle, West Approach"
+
+  - camera_id: "CAM-J3-EAST"
+    name: "Junction 3 - Hospital Approach"
+    junction_id: "J-103"
+    url: "demo"
+    is_simulated: true
+    reconnect_interval_seconds: 5.0
+    max_fps: 25
+    location:
+      lat: 12.98120
+      lng: 77.60850
+      address: "Old Airport Road & Victoria Hospital Entry"
+
+junctions:
+  - junction_id: "J-101"
+    name: "MG Road & Brigade Rd Intersection"
+    lat: 12.97160
+    lng: 77.59460
+    default_state: "RED"
+    connected_cameras: ["CAM-J1-NORTH"]
+
+  - junction_id: "J-102"
+    name: "Trinity Circle"
+    lat: 12.97580
+    lng: 77.60120
+    default_state: "RED"
+    connected_cameras: ["CAM-J2-CENTRAL"]
+
+  - junction_id: "J-103"
+    name: "Victoria Hospital Entry"
+    lat: 12.98120
+    lng: 77.60850
+    default_state: "RED"
+    connected_cameras: ["CAM-J3-EAST"]

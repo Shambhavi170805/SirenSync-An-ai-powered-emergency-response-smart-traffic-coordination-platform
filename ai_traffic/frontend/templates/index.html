@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SirenSync - AI Green Corridor Traffic Command Center</title>
+  <link rel="stylesheet" href="/static/css/dashboard.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Header Bar -->
+  <header class="navbar">
+    <div class="brand">
+      <div class="logo-icon">🚑</div>
+      <div>
+        <h1 class="logo-title">SirenSync <span class="tag">AI GREEN CORRIDOR</span></h1>
+        <p class="logo-sub">Intelligent Pre-emptive Traffic Signal Control & Vision Telemetry</p>
+      </div>
+    </div>
+
+    <!-- Live Telemetry / Verification Badges -->
+    <div class="status-badges">
+      <div id="feed-badge" class="badge badge-simulated">
+        <span class="pulse-dot yellow"></span>
+        <span id="feed-badge-text">FEED: SIMULATED / TEST FEEDS</span>
+      </div>
+      <div id="controller-badge" class="badge badge-simulated">
+        <span class="pulse-dot blue"></span>
+        <span id="controller-badge-text">CONTROLLER: SIMULATED (No hardware lock)</span>
+      </div>
+      <div id="ws-badge" class="badge badge-connected">
+        <span class="pulse-dot green"></span>
+        <span id="ws-status-text">WS: CONNECTING...</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Notice Disclaimer Banner -->
+  <aside class="notice-banner" aria-label="System Notice">
+    <strong>SYSTEM ARCHITECTURE NOTICE:</strong> Traffic signals and camera feeds in this view are currently operating in <strong>Software Simulation Mode</strong>. Physical traffic signal pre-emption requires municipal traffic authority authorization and dedicated roadside controller integration.
+  </aside>
+
+  <!-- Main Grid Layout -->
+  <main class="dashboard-grid">
+    <!-- Left Column: Google Maps & Route Status -->
+    <section class="panel map-panel" aria-labelledby="map-section-title">
+      <div class="panel-header">
+        <h2 id="map-section-title" class="panel-title">Corridor Geospatial Telemetry</h2>
+        <div class="panel-actions">
+          <label class="toggle-control">
+            <input type="checkbox" id="toggle-traffic" checked>
+            <span>Traffic Layer</span>
+          </label>
+          <button id="btn-dispatch-demo" class="btn btn-primary" title="Trigger full corridor transit">
+            ⚡ Dispatch Demo Corridor
+          </button>
+        </div>
+      </div>
+
+      <!-- Map Container -->
+      <div id="map-container" class="map-view">
+        <div id="map-placeholder" class="map-fallback">
+          <div class="fallback-spinner"></div>
+          <p id="map-fallback-msg">Initializing Google Maps JavaScript API...</p>
+        </div>
+      </div>
+
+      <!-- Route Progress Bar -->
+      <div class="route-progress-bar-container">
+        <div class="progress-info">
+          <span>Active Ambulance: <strong id="active-amb-id">None</strong></span>
+          <span id="active-amb-status">Corridor Idle</span>
+          <span id="active-amb-percent">0%</span>
+        </div>
+        <div class="progress-track">
+          <div id="route-progress-fill" class="progress-fill" style="width: 0%;"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Column: Computer Vision & Signals -->
+    <div class="side-column">
+      <!-- Camera Feeds Panel -->
+      <section class="panel video-panel" aria-labelledby="video-section-title">
+        <div class="panel-header">
+          <h2 id="video-section-title" class="panel-title">Computer Vision Feed (YOLOv10)</h2>
+          <div class="camera-selector">
+            <select id="camera-select" aria-label="Select camera feed">
+              <option value="CAM-J1-NORTH">Junction 1 - North (CAM-J1-NORTH)</option>
+              <option value="CAM-J2-CENTRAL">Junction 2 - Central (CAM-J2-CENTRAL)</option>
+              <option value="CAM-J3-EAST">Junction 3 - Hospital Entry (CAM-J3-EAST)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="video-container">
+          <img id="mjpeg-stream" src="/video_feed/CAM-J1-NORTH" alt="Live Junction Camera Stream" />
+          <div class="video-overlay-badge" id="video-feed-tag">SIMULATED FEED</div>
+        </div>
+
+        <div class="video-controls">
+          <button id="btn-trigger-amb-cam" class="btn btn-secondary">
+            🚨 Inject Ambulance in Camera
+          </button>
+          <button id="btn-reset-signals" class="btn btn-outline">
+            ↺ Reset Signals
+          </button>
+        </div>
+      </section>
+
+      <!-- Junctions Signal Status Panel -->
+      <section class="panel junctions-panel" aria-labelledby="junctions-section-title">
+        <div class="panel-header">
+          <h2 id="junctions-section-title" class="panel-title">Junction Signal State Machines</h2>
+        </div>
+        <div id="junctions-list" class="junctions-list" role="list">
+          <!-- Populated dynamically by dashboard.js -->
+          <div class="loading-state">Loading junctions telemetry...</div>
+        </div>
+      </section>
+
+      <!-- Real-time Event Log Panel -->
+      <section class="panel events-panel" aria-labelledby="events-section-title">
+        <div class="panel-header">
+          <h2 id="events-section-title" class="panel-title">Audit & Telemetry Event Log</h2>
+          <span class="event-count" id="event-counter">0 events</span>
+        </div>
+        <div id="events-container" class="events-scroll" role="log" aria-live="polite">
+          <!-- Populated dynamically by dashboard.js -->
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
