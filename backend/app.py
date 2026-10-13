@@ -10,6 +10,8 @@ from backend.routers import (
     reservations_router,
     reassignment_router,
     dashboard_router,
+    ambulances_router,
+    tracking_router,
 )
 
 @asynccontextmanager
@@ -52,11 +54,18 @@ app.include_router(ranking_router, prefix=settings.API_V1_PREFIX)
 app.include_router(reservations_router, prefix=settings.API_V1_PREFIX)
 app.include_router(reassignment_router, prefix=settings.API_V1_PREFIX)
 app.include_router(dashboard_router, prefix=settings.API_V1_PREFIX)
+app.include_router(ambulances_router, prefix=settings.API_V1_PREFIX)
+app.include_router(tracking_router, prefix=settings.API_V1_PREFIX)
 
 # Mount Hospital Operations Dashboard UI
 frontend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "hospital")
 if os.path.exists(frontend_dir):
     app.mount("/dashboard", StaticFiles(directory=frontend_dir, html=True), name="dashboard")
+
+# Mount Driver-Side Interface (Member 3 - Nidhi)
+driver_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "driver")
+if os.path.exists(driver_dir):
+    app.mount("/driver", StaticFiles(directory=driver_dir, html=True), name="driver")
 
 @app.get("/", tags=["System Health"])
 def root():
@@ -67,6 +76,7 @@ def root():
         "version": settings.APP_VERSION,
         "status": "OPERATIONAL",
         "dashboard": "/dashboard/",
+        "driver": "/driver/",
         "documentation": "/docs",
         "apiPrefix": settings.API_V1_PREFIX,
         "policy": {

@@ -15,6 +15,7 @@ from backend.services.bed_service import (
     BedReservationConflictException,
     HospitalNotFoundException,
 )
+from backend.services.ambulance_service import AmbulanceDispatchService
 
 router = APIRouter(prefix="", tags=["Hospital Selection & Bed Reservation"])
 
@@ -32,7 +33,8 @@ def select_hospital_and_reserve_bed(
     Hospital Selection Integration Endpoint.
     Invoked when patient selects a hospital from the ranked list in Shambhavi's UI.
     Validates bed availability, executes transaction-safe atomic bed locking,
-    and designates the selected hospital as the coordinating authority.
+    designates the selected hospital as the coordinating authority,
+    and dispatches an available ambulance (Member 3 - Nidhi).
     """
     try:
         reservation, bed = BedManagementService.reserve_bed_atomically(
@@ -43,6 +45,21 @@ def select_hospital_and_reserve_bed(
         )
 
         hospital = db.query(Hospital).filter(Hospital.id == request.selectedHospitalId).one()
+
+        # Phase 2: Hospital-Coordinated Ambulance Dispatch Hook
+        # Dispatches best-fit available ambulance; idempotent and concurrency-safe
+        assigned_ambulance = AmbulanceDispatchService.dispatch_for_emergency(
+            db=db,
+            emergency_id=emergency_id,
+            hospital_id=hospital.id
+        )
+
+        if assigned_ambulance:
+            dispatch_status = "AMBULANCE_COORDINATION_INITIATED"
+            message = f"Bed reserved securely. Ambulance {assigned_ambulance.vehicleNumber} dispatched to patient."
+        else:
+            dispatch_status = "AMBULANCE_PENDING_AVAILABILITY"
+            message = "Bed reserved securely. However, no ambulance is currently available in the fleet."
 
         return HospitalSelectionResponse(
             status="SUCCESS",
@@ -61,9 +78,10 @@ def select_hospital_and_reserve_bed(
                 hospitalName=hospital.name,
                 contactNumber=hospital.contact_number,
                 address=hospital.address,
-                dispatchStatus="AMBULANCE_COORDINATION_INITIATED"
+                dispatchStatus=dispatch_status
             ),
-            message="Bed reserved securely. Hospital is now the coordinating authority."
+            assignedAmbulance=assigned_ambulance,
+            message=message
         )
 
     except BedNotAvailableException as e:

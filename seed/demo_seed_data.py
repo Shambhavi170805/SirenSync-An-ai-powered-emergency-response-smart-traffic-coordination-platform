@@ -13,7 +13,16 @@ from backend.models.emergency import Emergency
 from backend.models.reservation import BedReservation
 from backend.models.queue import HospitalQueueItem
 from backend.models.audit import ReassignmentAuditLog
-from backend.models.enums import BedTypeEnum, BedStatusEnum, PriorityEnum, ReservationStatusEnum, QueueStatusEnum
+from backend.models.ambulance import Ambulance
+from backend.models.enums import (
+    BedTypeEnum,
+    BedStatusEnum,
+    PriorityEnum,
+    ReservationStatusEnum,
+    QueueStatusEnum,
+    AmbulanceStatusEnum,
+    AmbulanceTypeEnum,
+)
 
 HOSPITALS_DATA = [
     {
@@ -121,10 +130,133 @@ HOSPITALS_DATA = [
     },
 ]
 
+AMBULANCES_DATA = [
+    {
+        "id": "amb-bengaluru-als-01",
+        "vehicle_number": "KA-01-EA-1081",
+        "driver_name": "Rajesh Kumar",
+        "driver_contact": "+91-98450-11001",
+        "ambulance_type": AmbulanceTypeEnum.ALS,
+        "equipment_tags": "VENTILATOR,DEFIBRILLATOR,OXYGEN,ECG",
+        "status": AmbulanceStatusEnum.AVAILABLE,
+        "current_latitude": 12.9716,
+        "current_longitude": 77.5946,
+        "current_address": "MG Road Metro Station Area, Bengaluru",
+        "assigned_emergency_id": None,
+        "destination_hospital_id": None,
+        "route_progress": 0.0,
+    },
+    {
+        "id": "amb-bengaluru-als-02",
+        "vehicle_number": "KA-01-EA-1082",
+        "driver_name": "Suresh Gowda",
+        "driver_contact": "+91-98450-11002",
+        "ambulance_type": AmbulanceTypeEnum.ALS,
+        "equipment_tags": "VENTILATOR,DEFIBRILLATOR,OXYGEN,ECG",
+        "status": AmbulanceStatusEnum.AVAILABLE,
+        "current_latitude": 12.9784,
+        "current_longitude": 77.6408,
+        "current_address": "100ft Road, Indiranagar, Bengaluru",
+        "assigned_emergency_id": None,
+        "destination_hospital_id": None,
+        "route_progress": 0.0,
+    },
+    {
+        "id": "amb-bengaluru-bls-01",
+        "vehicle_number": "KA-01-EA-1083",
+        "driver_name": "Anand Murthy",
+        "driver_contact": "+91-98450-11003",
+        "ambulance_type": AmbulanceTypeEnum.BLS,
+        "equipment_tags": "OXYGEN,FIRST_AID_KIT,STRETCHER",
+        "status": AmbulanceStatusEnum.AVAILABLE,
+        "current_latitude": 12.9352,
+        "current_longitude": 77.6245,
+        "current_address": "Sony World Signal, Koramangala, Bengaluru",
+        "assigned_emergency_id": None,
+        "destination_hospital_id": None,
+        "route_progress": 0.0,
+    },
+    {
+        "id": "amb-bengaluru-bls-02",
+        "vehicle_number": "KA-01-EA-1084",
+        "driver_name": "Chetan Rao",
+        "driver_contact": "+91-98450-11004",
+        "ambulance_type": AmbulanceTypeEnum.BLS,
+        "equipment_tags": "OXYGEN,FIRST_AID_KIT,STRETCHER",
+        "status": AmbulanceStatusEnum.AVAILABLE,
+        "current_latitude": 13.0031,
+        "current_longitude": 77.5643,
+        "current_address": "8th Cross, Malleshwaram, Bengaluru",
+        "assigned_emergency_id": None,
+        "destination_hospital_id": None,
+        "route_progress": 0.0,
+    },
+    {
+        "id": "amb-bengaluru-micu-01",
+        "vehicle_number": "KA-01-EA-1085",
+        "driver_name": "Mohammed Rizwan",
+        "driver_contact": "+91-98450-11005",
+        "ambulance_type": AmbulanceTypeEnum.MICU,
+        "equipment_tags": "FULL_ICU_VENTILATOR,DEFIBRILLATOR,INFUSION_PUMP,MULTIPARA_MONITOR",
+        "status": AmbulanceStatusEnum.AVAILABLE,
+        "current_latitude": 12.9250,
+        "current_longitude": 77.5938,
+        "current_address": "4th Block, Jayanagar, Bengaluru",
+        "assigned_emergency_id": None,
+        "destination_hospital_id": None,
+        "route_progress": 0.0,
+    },
+    {
+        "id": "amb-bengaluru-als-03",
+        "vehicle_number": "KA-01-EA-1086",
+        "driver_name": "Ramesh Nayak",
+        "driver_contact": "+91-98450-11006",
+        "ambulance_type": AmbulanceTypeEnum.ALS,
+        "equipment_tags": "VENTILATOR,DEFIBRILLATOR,OXYGEN,ECG",
+        "status": AmbulanceStatusEnum.AVAILABLE,
+        "current_latitude": 12.9698,
+        "current_longitude": 77.7500,
+        "current_address": "ITPL Main Road, Whitefield, Bengaluru",
+        "assigned_emergency_id": None,
+        "destination_hospital_id": None,
+        "route_progress": 0.0,
+    },
+    {
+        "id": "amb-bengaluru-als-04",
+        "vehicle_number": "KA-01-EA-1087",
+        "driver_name": "Prakash V",
+        "driver_contact": "+91-98450-11007",
+        "ambulance_type": AmbulanceTypeEnum.ALS,
+        "equipment_tags": "VENTILATOR,DEFIBRILLATOR,OXYGEN,ECG",
+        "status": AmbulanceStatusEnum.AVAILABLE,
+        "current_latitude": 12.9650,
+        "current_longitude": 77.6350,
+        "current_address": "Old Airport Road Transit Corridor, Bengaluru",
+        "assigned_emergency_id": None,
+        "destination_hospital_id": None,
+        "route_progress": 0.0,
+    },
+    {
+        "id": "amb-bengaluru-als-05",
+        "vehicle_number": "KA-01-EA-1088",
+        "driver_name": "Vinod Kumar",
+        "driver_contact": "+91-98450-11008",
+        "ambulance_type": AmbulanceTypeEnum.ALS,
+        "equipment_tags": "VENTILATOR,DEFIBRILLATOR,OXYGEN,ECG",
+        "status": AmbulanceStatusEnum.AVAILABLE,
+        "current_latitude": 12.9610,
+        "current_longitude": 77.6430,
+        "current_address": "Kodihalli Approach, Bengaluru",
+        "assigned_emergency_id": None,
+        "destination_hospital_id": None,
+        "route_progress": 0.0,
+    },
+]
+
 def seed_database(db: Session = None):
     """
     Seeds database with 5 Bengaluru hospitals, full capability matrix,
-    and realistic bed distributions.
+    realistic bed distributions, and prototype ambulance fleet.
     """
     close_at_end = False
     if db is None:
@@ -137,6 +269,7 @@ def seed_database(db: Session = None):
         db.query(ReassignmentAuditLog).delete()
         db.query(BedReservation).delete()
         db.query(HospitalQueueItem).delete()
+        db.query(Ambulance).delete()
         db.query(Emergency).delete()
         db.query(Bed).delete()
         db.query(HospitalCapability).delete()
@@ -292,8 +425,29 @@ def seed_database(db: Session = None):
         )
         db.add(audit_sample_2)
 
+        # Seed prototype ambulance fleet for Nidhi's module
+        for amb_data in AMBULANCES_DATA:
+            ambulance = Ambulance(
+                id=amb_data["id"],
+                vehicle_number=amb_data["vehicle_number"],
+                driver_name=amb_data["driver_name"],
+                driver_contact=amb_data["driver_contact"],
+                ambulance_type=amb_data["ambulance_type"],
+                equipment_tags=amb_data["equipment_tags"],
+                status=amb_data["status"],
+                current_latitude=amb_data["current_latitude"],
+                current_longitude=amb_data["current_longitude"],
+                current_address=amb_data["current_address"],
+                assigned_emergency_id=amb_data["assigned_emergency_id"],
+                destination_hospital_id=amb_data["destination_hospital_id"],
+                route_progress=amb_data["route_progress"],
+                is_simulated=True,
+                created_at=datetime.utcnow()
+            )
+            db.add(ambulance)
+
         db.commit()
-        print(f"Successfully seeded {len(HOSPITALS_DATA)} hospitals and {total_beds_created} beds with linked reservations and queue items.")
+        print(f"Successfully seeded {len(HOSPITALS_DATA)} hospitals, {total_beds_created} beds, and {len(AMBULANCES_DATA)} ambulances with linked reservations and queue items.")
 
     finally:
         if close_at_end:

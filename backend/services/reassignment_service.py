@@ -268,141 +268,155 @@ class BedReassignmentService:
         event_id = f"evt-reassign-{uuid.uuid4().hex[:8]}"
         reassigned_bed_id = target_res.bed_id
 
-        # 4a. Update displaced reservation status
-        target_res.status = ReservationStatusEnum.RELEASED_FOR_REASSIGNMENT
-        target_res.released_at = datetime.utcnow()
-        target_res.reassigned_to_emergency_id = request.displacingEmergencyId
+        try:
+            # 4a. Update displaced reservation status
+            target_res.status = ReservationStatusEnum.RELEASED_FOR_REASSIGNMENT
+            target_res.released_at = datetime.utcnow()
+            target_res.reassigned_to_emergency_id = request.displacingEmergencyId
 
-        # Ensure displacing emergency entity exists in database
-        displacing_emergency = db.query(Emergency).filter(Emergency.id == request.displacingEmergencyId).first()
-        if not displacing_emergency:
-            displacing_emergency = Emergency(
-                id=request.displacingEmergencyId,
-                patient_id=f"pat-{uuid.uuid4().hex[:6]}",
-                emergency_type="HIGH_PRIORITY_ESCALATION",
-                priority=displacing_priority,
-                patient_latitude=request.patientLocation.latitude,
-                patient_longitude=request.patientLocation.longitude,
-                patient_address=request.patientLocation.address,
-                required_bed_type=req_bed_type,
-                selected_hospital_id=target_hospital_id
-            )
-            db.add(displacing_emergency)
-            db.flush()
-        else:
-            displacing_emergency.selected_hospital_id = target_hospital_id
-            db.flush()
+            # Ensure displacing emergency entity exists in database
+            displacing_emergency = db.query(Emergency).filter(Emergency.id == request.displacingEmergencyId).first()
+            if not displacing_emergency:
+                displacing_emergency = Emergency(
+                    id=request.displacingEmergencyId,
+                    patient_id=f"pat-{uuid.uuid4().hex[:6]}",
+                    emergency_type="HIGH_PRIORITY_ESCALATION",
+                    priority=displacing_priority,
+                    patient_latitude=request.patientLocation.latitude,
+                    patient_longitude=request.patientLocation.longitude,
+                    patient_address=request.patientLocation.address,
+                    required_bed_type=req_bed_type,
+                    selected_hospital_id=target_hospital_id
+                )
+                db.add(displacing_emergency)
+                db.flush()
+            else:
+                displacing_emergency.selected_hospital_id = target_hospital_id
+                db.flush()
 
-        # 4b. Allocate the bed to displacing emergency
-        new_res_id = f"res-{uuid.uuid4().hex[:8]}"
-        displacing_res = BedReservation(
-            id=new_res_id,
-            emergency_id=request.displacingEmergencyId,
-            hospital_id=target_hospital_id,
-            bed_id=reassigned_bed_id,
-            status=ReservationStatusEnum.RESERVED,
-            reserved_at=datetime.utcnow()
-        )
-        db.add(displacing_res)
-
-        # 4c. Update Queue for displacing emergency
-        displacing_queue = (
-            db.query(HospitalQueueItem)
-            .filter(HospitalQueueItem.emergency_id == request.displacingEmergencyId)
-            .first()
-        )
-        if not displacing_queue:
-            displacing_queue = HospitalQueueItem(
-                id=f"qitem-{uuid.uuid4().hex[:8]}",
-                hospital_id=target_hospital_id,
+            # 4b. Allocate the bed to displacing emergency
+            new_res_id = f"res-{uuid.uuid4().hex[:8]}"
+            displacing_res = BedReservation(
+                id=new_res_id,
                 emergency_id=request.displacingEmergencyId,
-                priority=displacing_priority,
-                status=QueueStatusEnum.COORDINATING,
-                route_progress=0.0,
-                notes=f"Reassigned bed {reassigned_bed_id} due to higher priority."
+                hospital_id=target_hospital_id,
+                bed_id=reassigned_bed_id,
+                status=ReservationStatusEnum.RESERVED,
+                reserved_at=datetime.utcnow()
             )
-            db.add(displacing_queue)
-        else:
-            displacing_queue.hospital_id = target_hospital_id
-            displacing_queue.status = QueueStatusEnum.COORDINATING
+            db.add(displacing_res)
 
-        # 4d. Mark displaced queue item as REROUTED
-        target_queue.status = QueueStatusEnum.REROUTED
-        target_queue.notes = f"Displaced by higher priority emergency {request.displacingEmergencyId}."
+            # 4c. Update Queue for displacing emergency
+            displacing_queue = (
+                db.query(HospitalQueueItem)
+                .filter(HospitalQueueItem.emergency_id == request.displacingEmergencyId)
+                .first()
+            )
+            if not displacing_queue:
+                displacing_queue = HospitalQueueItem(
+                    id=f"qitem-{uuid.uuid4().hex[:8]}",
+                    hospital_id=target_hospital_id,
+                    emergency_id=request.displacingEmergencyId,
+                    priority=displacing_priority,
+                    status=QueueStatusEnum.COORDINATING,
+                    route_progress=0.0,
+                    notes=f"Reassigned bed {reassigned_bed_id} due to higher priority."
+                )
+                db.add(displacing_queue)
+            else:
+                displacing_queue.hospital_id = target_hospital_id
+                displacing_queue.status = QueueStatusEnum.COORDINATING
 
-        # 4e. Find next best ranked hospital for the displaced emergency
-        displaced_emergency = db.query(Emergency).filter(Emergency.id == displaced_emg_id).first()
-        next_best_hospital = None
-        next_best_hospital_id = None
-        next_best_bed_id = None
+            # 4d. Find next best ranked hospital for the displaced emergency
+            displaced_emergency = db.query(Emergency).filter(Emergency.id == displaced_emg_id).first()
+            next_best_hospital = None
+            next_best_hospital_id = None
+            next_best_bed_id = None
 
-        if displaced_emergency:
-            # Query ranking engine for alternative hospitals excluding the contention hospital
-            rank_req = RankingRequest(
+            if displaced_emergency:
+                # Query ranking engine for alternative hospitals excluding the contention hospital
+                rank_req = RankingRequest(
+                    emergencyId=displaced_emg_id,
+                    patientLocation=request.patientLocation,
+                    emergencyType=displaced_emergency.emergency_type,
+                    priority=displaced_emergency.priority,
+                    requiredBedType=displaced_emergency.required_bed_type,
+                    requiredCapabilities=[]
+                )
+                rank_resp = ranking_engine.rank_hospitals(db, rank_req)
+                # Find next eligible hospital
+                for cand in rank_resp.rankedHospitals:
+                    if cand.hospitalId != target_hospital_id and cand.isEligible:
+                        next_best_hospital = {
+                            "hospitalId": cand.hospitalId,
+                            "name": cand.name,
+                            "distanceKm": cand.breakdown.distanceKm,
+                            "availableBeds": cand.breakdown.availableBedsCount
+                        }
+                        next_best_hospital_id = cand.hospitalId
+                        break
+
+            # 4e. Update displaced queue item
+            if next_best_hospital_id:
+                target_queue.status = QueueStatusEnum.REROUTED
+                target_queue.notes = f"Displaced by higher priority emergency {request.displacingEmergencyId}."
+            else:
+                target_queue.status = QueueStatusEnum.COORDINATING
+                target_queue.notes = f"Displaced by higher priority emergency {request.displacingEmergencyId}; no alternative hospital available."
+
+            # 4f. Construct machine-readable rerouting event for Nidhi's module
+            reroute_status = "REROUTE_REQUIRED" if next_best_hospital_id else "NO_ALTERNATIVE_HOSPITAL"
+            reroute_event = RerouteEventContract(
+                eventType=EVENT_BED_REASSIGNMENT_REROUTE,
+                eventId=event_id,
                 emergencyId=displaced_emg_id,
-                patientLocation=request.patientLocation,
-                emergencyType=displaced_emergency.emergency_type,
-                priority=displaced_emergency.priority,
-                requiredBedType=displaced_emergency.required_bed_type,
-                requiredCapabilities=[]
+                previousHospitalId=target_hospital_id,
+                previousBedId=reassigned_bed_id,
+                newHospitalId=next_best_hospital_id,
+                newBedId=next_best_bed_id,
+                displacingEmergencyId=request.displacingEmergencyId,
+                displacingPriority=displacing_priority,
+                displacedPriority=target_queue.priority,
+                reason="HIGHER_PRIORITY_EMERGENCY",
+                routeProgress=route_progress,
+                threshold=threshold,
+                status=reroute_status,
+                timestamp=datetime.utcnow()
             )
-            rank_resp = ranking_engine.rank_hospitals(db, rank_req)
-            # Find next eligible hospital
-            for cand in rank_resp.rankedHospitals:
-                if cand.hospitalId != target_hospital_id and cand.isEligible:
-                    next_best_hospital = {
-                        "hospitalId": cand.hospitalId,
-                        "name": cand.name,
-                        "distanceKm": cand.breakdown.distanceKm,
-                        "availableBeds": cand.breakdown.availableBedsCount
-                    }
-                    next_best_hospital_id = cand.hospitalId
-                    break
 
-        # 4f. Construct machine-readable rerouting event for Nidhi's module
-        reroute_event = RerouteEventContract(
-            eventType=EVENT_BED_REASSIGNMENT_REROUTE,
-            eventId=event_id,
-            emergencyId=displaced_emg_id,
-            previousHospitalId=target_hospital_id,
-            previousBedId=reassigned_bed_id,
-            newHospitalId=next_best_hospital_id,
-            newBedId=next_best_bed_id,
-            displacingEmergencyId=request.displacingEmergencyId,
-            displacingPriority=displacing_priority,
-            displacedPriority=target_queue.priority,
-            reason="HIGHER_PRIORITY_EMERGENCY",
-            routeProgress=route_progress,
-            threshold=threshold,
-            status="REROUTE_REQUIRED",
-            timestamp=datetime.utcnow()
-        )
+            # 4g. Persist ReassignmentAuditLog
+            audit_log = ReassignmentAuditLog(
+                id=f"audit-{uuid.uuid4().hex[:8]}",
+                event_id=event_id,
+                displaced_emergency_id=displaced_emg_id,
+                displacing_emergency_id=request.displacingEmergencyId,
+                displaced_priority=target_queue.priority,
+                displacing_priority=displacing_priority,
+                previous_hospital_id=target_hospital_id,
+                previous_bed_id=reassigned_bed_id,
+                new_hospital_id=next_best_hospital_id,
+                new_bed_id=next_best_bed_id,
+                route_progress=route_progress,
+                threshold=threshold,
+                decision="REASSIGNMENT_APPROVED",
+                reason=f"Priority escalation: {displacing_priority.value} displaced {target_queue.priority.value} at {route_progress}% route progress (< {threshold}% threshold).",
+                created_at=datetime.utcnow()
+            )
+            db.add(audit_log)
 
-        # 4g. Persist ReassignmentAuditLog
-        audit_log = ReassignmentAuditLog(
-            id=f"audit-{uuid.uuid4().hex[:8]}",
-            event_id=event_id,
-            displaced_emergency_id=displaced_emg_id,
-            displacing_emergency_id=request.displacingEmergencyId,
-            displaced_priority=target_queue.priority,
-            displacing_priority=displacing_priority,
-            previous_hospital_id=target_hospital_id,
-            previous_bed_id=reassigned_bed_id,
-            new_hospital_id=next_best_hospital_id,
-            new_bed_id=next_best_bed_id,
-            route_progress=route_progress,
-            threshold=threshold,
-            decision="REASSIGNMENT_APPROVED",
-            reason=f"Priority escalation: {displacing_priority.value} displaced {target_queue.priority.value} at {route_progress}% route progress (< {threshold}% threshold).",
-            created_at=datetime.utcnow()
-        )
-        db.add(audit_log)
+            # 4h. Apply destination reroute to assigned ambulance (Member 3 - Nidhi)
+            if next_best_hospital_id:
+                from backend.services.ambulance_service import AmbulanceDispatchService
+                AmbulanceDispatchService.apply_reroute(db, reroute_event, commit=False)
 
-        # Commit all changes in a single atomic transaction
-        db.commit()
+            # Fetch locked bed details
+            bed_obj = db.query(Bed).filter(Bed.id == reassigned_bed_id).one()
 
-        # Fetch locked bed details
-        bed_obj = db.query(Bed).filter(Bed.id == reassigned_bed_id).one()
+            # Commit all changes in a single atomic transaction
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
 
         return ReassignmentEvaluationResponse(
             decision="REASSIGNMENT_APPROVED",
@@ -411,7 +425,7 @@ class BedReassignmentService:
             displacedEmergencyId=displaced_emg_id,
             routeProgress=route_progress,
             displacedReservationStatus=target_res.status.value,
-            rerouteRequired=True,
+            rerouteRequired=bool(next_best_hospital_id),
             scenarioName="Scenario C (< 40% Route Progress)",
             displacingReservation=BedReservationDetail(
                 reservationId=displacing_res.id,

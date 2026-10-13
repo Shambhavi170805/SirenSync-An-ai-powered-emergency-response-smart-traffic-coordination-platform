@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 from backend.models.enums import BedTypeEnum, ReservationStatusEnum
 from backend.shared.contracts import CoordinatesContract
+from backend.schemas.ambulance import AmbulanceDispatchInfo
 
 class HospitalSelectionRequest(BaseModel):
     selectedHospitalId: str = Field(..., description="Hospital ID chosen by the patient in Shambhavi's UI")
@@ -31,6 +32,7 @@ class HospitalSelectionResponse(BaseModel):
     hospitalId: str
     reservation: BedReservationDetail
     coordinatingHospital: CoordinatingHospitalInfo
+    assignedAmbulance: Optional[AmbulanceDispatchInfo] = None
     message: str = "Bed reserved securely. Hospital is now the coordinating authority."
 
 class HospitalReservationItemResponse(BaseModel):

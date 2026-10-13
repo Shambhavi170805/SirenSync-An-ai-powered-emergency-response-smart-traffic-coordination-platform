@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SirenSync — Ambulance Driver & Telemetry HUD</title>
+
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN for Zero-Build Architecture -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    /* Sleek custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+  </style>
+</head>
+<body class="h-full bg-slate-900 text-slate-100 flex flex-col antialiased">
+
+  <!-- Header Root -->
+  <div id="header-root"></div>
+
+  <!-- Main Driver Viewport -->
+  <main class="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6">
+    <div id="main-content" class="min-h-[500px]">
+      <div class="p-12 text-center text-slate-500">
+        <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-rose-500 border-t-transparent mb-3"></div>
+        <p class="text-sm">Connecting to fleet telemetry stream...</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-slate-950 border-t border-slate-800/80 py-4 text-xs text-slate-500">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-center sm:text-left">
+      <div>
+        <span class="font-bold text-slate-400">SirenSync Ambulance Coordination</span> • Phase 4 Driver Console
+      </div>
+      <div class="flex items-center space-x-3 text-[11px] text-slate-500">
+        <span>Owner: <strong class="text-slate-400">Nidhi</strong></span>
+        <span>•</span>
+        <a href="/dashboard/" class="text-rose-400 hover:underline">Hospital Operations</a>
+        <span>•</span>
+        <a href="/docs" target="_blank" class="text-slate-400 hover:underline">API Docs</a>
+        <span>•</span>
+        <span class="text-amber-500 font-medium">Prototype Simulation Mode</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+  <!-- Application Entry Point -->
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>

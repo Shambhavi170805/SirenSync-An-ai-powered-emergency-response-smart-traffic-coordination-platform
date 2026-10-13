@@ -32,3 +32,17 @@ class QueueStatusEnum(str, Enum):
     ARRIVED = "ARRIVED"
     REROUTED = "REROUTED"
     CANCELLED = "CANCELLED"
+
+class AmbulanceStatusEnum(str, Enum):
+    AVAILABLE = "AVAILABLE"
+    ASSIGNED = "ASSIGNED"
+    EN_ROUTE_PICKUP = "EN_ROUTE_PICKUP"
+    PATIENT_ONBOARD = "PATIENT_ONBOARD"
+    EN_ROUTE_HOSPITAL = "EN_ROUTE_HOSPITAL"
+    ARRIVED = "ARRIVED"
+    MAINTENANCE = "MAINTENANCE"
+
+class AmbulanceTypeEnum(str, Enum):
+    BLS = "BLS"   # Basic Life Support
+    ALS = "ALS"   # Advanced Life Support
+    MICU = "MICU" # Mobile Intensive Care Unit

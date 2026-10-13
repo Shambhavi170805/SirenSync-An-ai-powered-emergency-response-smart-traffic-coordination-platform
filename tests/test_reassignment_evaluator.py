@@ -12,10 +12,23 @@ Validates:
 """
 
 import pytest
+from unittest.mock import MagicMock
 from backend.services.reassignment_service import BedReassignmentService
-from backend.models.enums import PriorityEnum, BedTypeEnum, ReservationStatusEnum
+from backend.services.ambulance_service import AmbulanceDispatchService
+from backend.models.enums import (
+    PriorityEnum,
+    BedTypeEnum,
+    ReservationStatusEnum,
+    QueueStatusEnum,
+    AmbulanceStatusEnum,
+)
 from backend.models.audit import ReassignmentAuditLog
+from backend.models.reservation import BedReservation
+from backend.models.emergency import Emergency
+from backend.models.queue import HospitalQueueItem
+from backend.models.ambulance import Ambulance
 from backend.schemas.reassignment import ReassignmentEvaluationRequest
+from backend.schemas.ranking import RankedHospitalsResponse
 from backend.shared.contracts import CoordinatesContract, EVENT_BED_REASSIGNMENT_REROUTE
 
 
@@ -237,3 +250,151 @@ def test_evaluator_repeatability_without_exhaustion(db_session):
         resp = BedReassignmentService.evaluate_and_reassign(db_session, req)
         assert resp.decision == "REASSIGNMENT_APPROVED"
         assert resp.rerouteRequired is True
+
+
+def test_reassignment_workflow_rollback_on_failure(db_session, monkeypatch):
+    """
+    Verifies that if an error occurs during the reassignment workflow,
+    all changes are rolled back atomically:
+    - Displaced reservation remains RESERVED.
+    - Displacing reservation is not created.
+    - Audit log is not committed.
+    """
+    # Monkeypatch apply_reroute to raise an unexpected runtime error
+    def _exploding_reroute(*args, **kwargs):
+        raise RuntimeError("Simulated failure in downstream reroute dispatch")
+
+    monkeypatch.setattr(AmbulanceDispatchService, "apply_reroute", staticmethod(_exploding_reroute))
+
+    # Pre-check target reservation status dynamically
+    displaced_res = (
+        db_session.query(BedReservation)
+        .filter(
+            BedReservation.hospital_id == "hosp-manipal-hal",
+            BedReservation.status == ReservationStatusEnum.RESERVED
+        )
+        .first()
+    )
+    assert displaced_res is not None
+    displaced_res_id = displaced_res.id
+
+    req = ReassignmentEvaluationRequest(
+        displacingEmergencyId="emg-fail-rollback-001",
+        displacingPriority=PriorityEnum.P1_CRITICAL,
+        requiredBedType=BedTypeEnum.ICU,
+        targetHospitalId="hosp-manipal-hal",
+        patientLocation=CoordinatesContract(latitude=12.9716, longitude=77.5946),
+        simulatedRouteProgress=20.0
+    )
+
+    with pytest.raises(RuntimeError, match="Simulated failure in downstream reroute dispatch"):
+        BedReassignmentService.evaluate_and_reassign(db_session, req)
+
+    # Verify atomic rollback
+    db_session.expire_all()
+    displaced_res_after = db_session.query(BedReservation).filter(BedReservation.id == displaced_res_id).one()
+    assert displaced_res_after.status == ReservationStatusEnum.RESERVED
+    assert displaced_res_after.reassigned_to_emergency_id is None
+
+    # Displacing reservation must not exist
+    displacing_res = db_session.query(BedReservation).filter(BedReservation.emergency_id == "emg-fail-rollback-001").first()
+    assert displacing_res is None
+
+    # Audit log must not exist
+    audit = db_session.query(ReassignmentAuditLog).filter(ReassignmentAuditLog.displacing_emergency_id == "emg-fail-rollback-001").first()
+    assert audit is None
+
+
+def test_reassignment_workflow_invokes_apply_reroute_without_commit(db_session, monkeypatch):
+    """
+    Verifies that BedReassignmentService passes commit=False to AmbulanceDispatchService.apply_reroute,
+    ensuring BedReassignmentService retains transaction ownership.
+    """
+    commit_flags = []
+    original_apply = AmbulanceDispatchService.apply_reroute
+
+    def _spy_apply_reroute(db, reroute_event, commit=True):
+        commit_flags.append(commit)
+        return original_apply(db, reroute_event, commit=commit)
+
+    monkeypatch.setattr(AmbulanceDispatchService, "apply_reroute", staticmethod(_spy_apply_reroute))
+
+    req = ReassignmentEvaluationRequest(
+        displacingEmergencyId="emg-spy-ownership-001",
+        displacingPriority=PriorityEnum.P1_CRITICAL,
+        requiredBedType=BedTypeEnum.ICU,
+        targetHospitalId="hosp-manipal-hal",
+        patientLocation=CoordinatesContract(latitude=12.9716, longitude=77.5946),
+        simulatedRouteProgress=20.0
+    )
+    resp = BedReassignmentService.evaluate_and_reassign(db_session, req)
+    assert resp.decision == "REASSIGNMENT_APPROVED"
+    assert commit_flags == [False], "apply_reroute must be invoked with commit=False from evaluate_and_reassign"
+
+
+def test_evaluator_missing_alternative_hospital_safe_handling(db_session):
+    """
+    Verifies safe handling when no alternative hospital is found for the displaced emergency:
+    - Reroute is not required (rerouteRequired=False).
+    - Reroute event status is NO_ALTERNATIVE_HOSPITAL and newHospitalId is None.
+    - Next best hospital is None.
+    - Assigned ambulance is NOT set to EN_ROUTE_HOSPITAL with None destination or cleared progress.
+    - Displaced queue item status is COORDINATING (not REROUTED).
+    - Displacing reservation is still allocated correctly.
+    """
+    mock_ranking = MagicMock()
+    mock_ranking.rank_hospitals.return_value = RankedHospitalsResponse(
+        emergencyId="emg-seed-002",
+        rankedHospitals=[],
+        weightsApplied={},
+        totalHospitalsEvaluated=0,
+        eligibleHospitalsCount=0
+    )
+
+    # Ensure ambulance assigned to displaced emergency has known status and destination
+    amb = db_session.query(Ambulance).filter(Ambulance.assigned_emergency_id == "emg-seed-002").first()
+    if amb:
+        amb.status = AmbulanceStatusEnum.ASSIGNED
+        amb.destination_hospital_id = "hosp-manipal-hal"
+        amb.route_progress = 20.0
+        db_session.commit()
+
+    req = ReassignmentEvaluationRequest(
+        displacingEmergencyId="emg-no-alt-001",
+        displacingPriority=PriorityEnum.P1_CRITICAL,
+        requiredBedType=BedTypeEnum.ICU,
+        targetHospitalId="hosp-manipal-hal",
+        patientLocation=CoordinatesContract(latitude=12.9716, longitude=77.5946),
+        simulatedRouteProgress=20.0
+    )
+
+    resp = BedReassignmentService.evaluate_and_reassign(db_session, req, ranking_engine=mock_ranking)
+
+    assert resp.decision == "REASSIGNMENT_APPROVED"
+    assert resp.rerouteRequired is False
+    assert resp.nextBestHospital is None
+    assert resp.rerouteEvent is not None
+    assert resp.rerouteEvent.status == "NO_ALTERNATIVE_HOSPITAL"
+    assert resp.rerouteEvent.newHospitalId is None
+
+    # Displacing reservation was still successfully allocated
+    assert resp.displacingReservation is not None
+    assert resp.displacingReservation.status == ReservationStatusEnum.RESERVED
+
+    # Displaced queue item marked COORDINATING rather than falsely REROUTED
+    db_session.expire_all()
+    qitem = db_session.query(HospitalQueueItem).filter(HospitalQueueItem.emergency_id == "emg-seed-002").first()
+    if qitem:
+        assert qitem.status == QueueStatusEnum.COORDINATING
+        assert "no alternative hospital available" in qitem.notes
+
+    # Ambulance was NOT marked en route to None destination
+    if amb:
+        amb_after = db_session.query(Ambulance).filter(Ambulance.assigned_emergency_id == "emg-seed-002").first()
+        assert amb_after.destination_hospital_id == "hosp-manipal-hal"
+        assert amb_after.status != AmbulanceStatusEnum.EN_ROUTE_HOSPITAL
+        assert amb_after.route_progress == 20.0
+
+    # Audit log accurately recorded new_hospital_id as None
+    audit = db_session.query(ReassignmentAuditLog).filter(ReassignmentAuditLog.displacing_emergency_id == "emg-no-alt-001").one()
+    assert audit.new_hospital_id is None

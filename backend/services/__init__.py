@@ -2,6 +2,7 @@ from backend.services.traffic_provider import ITrafficProvider, MockTrafficProvi
 from backend.services.ranking_service import HospitalRankingEngine, calculate_haversine_distance
 from backend.services.bed_service import BedManagementService, BedNotAvailableException, BedReservationConflictException, HospitalNotFoundException
 from backend.services.reassignment_service import BedReassignmentService
+from backend.services.ambulance_service import AmbulanceDispatchService
 
 __all__ = [
     "ITrafficProvider",
@@ -14,4 +15,5 @@ __all__ = [
     "BedReservationConflictException",
     "HospitalNotFoundException",
     "BedReassignmentService",
+    "AmbulanceDispatchService",
 ]

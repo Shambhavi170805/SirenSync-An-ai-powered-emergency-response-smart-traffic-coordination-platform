@@ -4,6 +4,8 @@ from backend.routers.ranking import router as ranking_router
 from backend.routers.reservations import router as reservations_router
 from backend.routers.reassignment import router as reassignment_router
 from backend.routers.dashboard import router as dashboard_router
+from backend.routers.ambulances import router as ambulances_router
+from backend.routers.tracking import router as tracking_router
 
 __all__ = [
     "hospitals_router",
@@ -12,5 +14,7 @@ __all__ = [
     "reservations_router",
     "reassignment_router",
     "dashboard_router",
+    "ambulances_router",
+    "tracking_router",
 ]
 
