@@ -176,4 +176,3 @@ async def websocket_events(websocket: WebSocket):
             await websocket.receive_text()
     except WebSocketDisconnect:
         websocket_clients.discard(websocket)
-
