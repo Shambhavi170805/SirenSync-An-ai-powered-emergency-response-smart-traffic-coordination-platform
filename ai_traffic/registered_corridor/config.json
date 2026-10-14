@@ -1,0 +1,31 @@
+{
+  "approach_distance_m": 250,
+  "passed_distance_m": 45,
+  "normal_cycle": {"north_south": "RED", "east_west": "GREEN"},
+  "signal_timing_seconds": {
+    "amber_before_corridor": 3,
+    "all_red_clearance": 1,
+    "amber_after_pass": 3,
+    "max_emergency_green": 60
+  },
+  "junctions": [
+    {"junction_id": "J-101", "name": "MG Road & Brigade Road", "lat": 12.9716, "lng": 77.5946, "ambulance_direction": "north_south"},
+    {"junction_id": "J-102", "name": "Trinity Circle", "lat": 12.9758, "lng": 77.6012, "ambulance_direction": "north_south"},
+    {"junction_id": "J-103", "name": "Hospital Entry", "lat": 12.9812, "lng": 77.6085, "ambulance_direction": "north_south"}
+  ],
+  "cameras": [
+    {"camera_id": "CAM-J101", "junction_id": "J-101", "source": "synthetic", "url": "demo"}
+  ],
+  "demo_route": {
+    "ambulance_id": "AMB-DEMO-01",
+    "vehicle_number": "KA03AB1234",
+    "junctions": ["J-101", "J-102", "J-103"],
+    "route_points": [
+      {"lat": 12.9680, "lng": 77.5910},
+      {"lat": 12.9716, "lng": 77.5946},
+      {"lat": 12.9758, "lng": 77.6012},
+      {"lat": 12.9812, "lng": 77.6085}
+    ],
+    "emergency_severity": "CRITICAL"
+  }
+}
