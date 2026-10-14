@@ -10,3 +10,7 @@ htmlcov/
 *.db-wal
 *.db-shm
 *.pt
+.venv/
+.venv-*/
+.scratch_pip_temp/
+**/__pycache__/

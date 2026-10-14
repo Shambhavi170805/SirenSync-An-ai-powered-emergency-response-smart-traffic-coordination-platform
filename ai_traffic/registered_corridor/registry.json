@@ -1,0 +1,9 @@
+{
+  "vehicles": [
+    {
+      "ambulance_id": "AMB-DEMO-01",
+      "vehicle_number": "KA03AB1234",
+      "label": "Demo ALS Ambulance"
+    }
+  ]
+}
