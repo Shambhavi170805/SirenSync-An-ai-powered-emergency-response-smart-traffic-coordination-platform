@@ -14,6 +14,7 @@ import {
 import QuickEmergencyForm from '../components/QuickEmergencyForm';
 
 export default function Dashboard({ 
+  currentUser,
   patientProfile, 
   activeEmergency, 
   onSubmitEmergency, 
@@ -61,6 +62,30 @@ export default function Dashboard({
           >
             <span>{activeEmergency.selectedHospital ? 'View Status Timeline' : 'View Hospital Options'}</span>
             <ArrowRight size={16} aria-hidden="true" />
+          </button>
+        </div>
+      )}
+
+      {/* Patient Account Status / Guest Banner */}
+      {currentUser ? (
+        <div className="patient-status-pill-banner" role="status">
+          <div className="status-pill-left">
+            <CheckCircle2 size={16} className="text-success" />
+            <span>
+              Signed in as <strong>{currentUser.full_name}</strong> ({currentUser.email})
+            </span>
+          </div>
+          <span className="profile-sync-badge">Emergency Profile Linked</span>
+        </div>
+      ) : (
+        <div className="patient-guest-notice-banner">
+          <span>Emergency assistance is open to all patients without logging in.</span>
+          <button 
+            type="button" 
+            onClick={() => onNavigate('auth')} 
+            className="btn-guest-signin"
+          >
+            Sign In / Register Profile →
           </button>
         </div>
       )}
