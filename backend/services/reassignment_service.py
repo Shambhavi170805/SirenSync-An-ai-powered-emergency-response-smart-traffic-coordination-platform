@@ -405,9 +405,16 @@ class BedReassignmentService:
             db.add(audit_log)
 
             # 4h. Apply destination reroute to assigned ambulance (Member 3 - Nidhi)
+            updated_amb = None
+            reroute_broadcast_payload = None
             if next_best_hospital_id:
                 from backend.services.ambulance_service import AmbulanceDispatchService
-                AmbulanceDispatchService.apply_reroute(db, reroute_event, commit=False)
+                updated_amb = AmbulanceDispatchService.apply_reroute(db, reroute_event, commit=False)
+                # Build broadcast payload before commit to avoid post-commit attribute expiry
+                if updated_amb is not None:
+                    reroute_broadcast_payload = AmbulanceDispatchService.build_reroute_payload(
+                        reroute_event, ambulance=updated_amb
+                    )
 
             # Fetch locked bed details
             bed_obj = db.query(Bed).filter(Bed.id == reassigned_bed_id).one()
@@ -417,6 +424,15 @@ class BedReassignmentService:
         except Exception:
             db.rollback()
             raise
+
+        # STRICTLY POST-COMMIT: Publish through tracking hub outside rollback block
+        if reroute_broadcast_payload:
+            from backend.services.tracking_service import tracking_hub
+            tracking_hub.broadcast_event_threadsafe(
+                event_type="REROUTE_ALERT",
+                payload=reroute_broadcast_payload,
+                emergency_id=reroute_event.emergencyId
+            )
 
         return ReassignmentEvaluationResponse(
             decision="REASSIGNMENT_APPROVED",

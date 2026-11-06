@@ -150,7 +150,8 @@ def test_status_transition_valid_lifecycle(client, db_session: Session):
     ASSIGNED -> EN_ROUTE_PICKUP -> PATIENT_ONBOARD -> EN_ROUTE_HOSPITAL -> ARRIVED -> AVAILABLE
     """
     amb_id = f"amb-life-{uuid.uuid4().hex[:6]}"
-    setup_test_ambulance(db_session, amb_id, status=AmbulanceStatusEnum.ASSIGNED)
+    emg_id = f"emg-life-{uuid.uuid4().hex[:6]}"
+    setup_test_ambulance(db_session, amb_id, status=AmbulanceStatusEnum.ASSIGNED, emergency_id=emg_id)
 
     lifecycle = [
         AmbulanceStatusEnum.EN_ROUTE_PICKUP,

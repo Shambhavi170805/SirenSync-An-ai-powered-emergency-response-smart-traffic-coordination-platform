@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, Set
+from typing import Optional, List, Dict, Set, Any
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import update
@@ -350,6 +350,46 @@ class AmbulanceDispatchService:
             db.refresh(ambulance)
 
         return ambulance
+
+    @staticmethod
+    def build_reroute_payload(
+        reroute_event: RerouteEventContract,
+        ambulance: Optional[Ambulance] = None
+    ) -> Dict[str, Any]:
+        """
+        Constructs a standardized, pre-commit materialized REROUTE_ALERT payload.
+        All attributes are read and converted to primitive types to prevent post-commit lazy queries.
+        routeProgress represents the new destination route's progress (0.0).
+        """
+        return {
+            "eventId": str(reroute_event.eventId),
+            "eventType": str(reroute_event.eventType),
+            "emergencyId": str(reroute_event.emergencyId),
+            "ambulanceId": str(ambulance.id) if ambulance else None,
+            "previousHospitalId": str(reroute_event.previousHospitalId),
+            "newHospitalId": str(reroute_event.newHospitalId) if reroute_event.newHospitalId else None,
+            "previousBedId": str(reroute_event.previousBedId) if reroute_event.previousBedId else None,
+            "newBedId": str(reroute_event.newBedId) if reroute_event.newBedId else None,
+            "displacingEmergencyId": str(reroute_event.displacingEmergencyId),
+            "displacingPriority": (
+                reroute_event.displacingPriority.value
+                if hasattr(reroute_event.displacingPriority, "value")
+                else str(reroute_event.displacingPriority)
+            ),
+            "displacedPriority": (
+                reroute_event.displacedPriority.value
+                if hasattr(reroute_event.displacedPriority, "value")
+                else str(reroute_event.displacedPriority)
+            ),
+            "reason": str(reroute_event.reason),
+            "routeProgress": float(ambulance.route_progress) if ambulance else 0.0,
+            "status": "REROUTE_EXECUTED",
+            "timestamp": (
+                reroute_event.timestamp.isoformat()
+                if hasattr(reroute_event.timestamp, "isoformat")
+                else str(reroute_event.timestamp)
+            )
+        }
 
     @staticmethod
     def get_tracking_snapshot(db: Session, emergency_id: str) -> Optional[TrackingSnapshotResponse]:

@@ -1,7 +1,7 @@
 import uuid
 import concurrent.futures
 from sqlalchemy import text
-from tests.conftest import TestingSessionLocal
+from conftest import TestingSessionLocal
 from backend.models.hospital import Hospital
 from backend.models.bed import Bed
 from backend.models.reservation import BedReservation

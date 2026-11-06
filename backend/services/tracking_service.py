@@ -1,7 +1,13 @@
+import asyncio
+import concurrent.futures
 from typing import Dict, Set, Optional, Any
 from datetime import datetime
 import json
+import logging
+import threading
 from fastapi import WebSocket
+
+logger = logging.getLogger("sirensync.tracking")
 
 class TrackingConnectionManager:
     """
@@ -18,6 +24,99 @@ class TrackingConnectionManager:
         self._emergency_channels: Dict[str, Set[WebSocket]] = {}
         # Global listeners (e.g. hospital dashboard, evaluator screens)
         self._global_listeners: Set[WebSocket] = set()
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._lock = threading.Lock()
+
+    def set_event_loop(self, loop: Optional[asyncio.AbstractEventLoop]) -> None:
+        """Registers or clears the primary application asyncio event loop in a thread-safe manner."""
+        with self._lock:
+            self._loop = loop
+
+    def broadcast_event_threadsafe(
+        self,
+        event_type: str,
+        payload: Dict[str, Any],
+        emergency_id: Optional[str] = None
+    ) -> None:
+        """
+        Thread-safe broadcast scheduling helper.
+        Safely dispatches broadcast_event() to the application event loop from either
+        the main async loop or synchronous worker threads.
+        Never blocks caller and never raises exceptions to calling transaction.
+        """
+        coro = self.broadcast_event(event_type=event_type, payload=payload, emergency_id=emergency_id)
+
+        # Retrieve registered application loop under thread-safety lock
+        with self._lock:
+            app_loop = self._loop
+
+        # Check if caller has a running event loop
+        current_loop: Optional[asyncio.AbstractEventLoop] = None
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
+
+        # Case A: Caller has a running event loop
+        if current_loop is not None:
+            # Schedule directly only if caller loop is the registered application loop and running
+            if app_loop is not None and current_loop is app_loop and app_loop.is_running():
+                try:
+                    task = app_loop.create_task(coro)
+                    task.add_done_callback(self._handle_task_result)
+                    return
+                except Exception as e:
+                    logger.warning(f"[TrackingHub] Failed to schedule broadcast task on application loop: {e}")
+                    coro.close()
+                    return
+            else:
+                # Caller has a foreign loop or app_loop is not running; do not access sockets across loops
+                logger.warning(
+                    "[TrackingHub] Caller event loop does not match registered application loop. "
+                    "Skipping broadcast to prevent cross-loop socket access."
+                )
+                coro.close()
+                return
+
+        # Case B: Caller is in a synchronous worker thread (no running loop); schedule onto registered app loop
+        if app_loop is not None and app_loop.is_running() and not app_loop.is_closed():
+            try:
+                future = asyncio.run_coroutine_threadsafe(coro, app_loop)
+                future.add_done_callback(self._handle_future_result)
+                return
+            except Exception as e:
+                logger.warning(f"[TrackingHub] Failed to dispatch coroutine to registered application loop: {e}")
+                coro.close()
+                return
+
+        # Case C: No usable application event loop exists (e.g. standalone test execution or shutdown)
+        logger.warning(
+            f"[TrackingHub] No active application event loop registered for broadcast '{event_type}'. "
+            "Telemetry broadcast skipped safely."
+        )
+        coro.close()
+
+    @staticmethod
+    def _handle_task_result(task: asyncio.Task) -> None:
+        """Callback to log exceptions from asyncio Tasks without raising unhandled errors."""
+        try:
+            if not task.cancelled():
+                exc = task.exception()
+                if exc:
+                    logger.warning(f"[TrackingHub] Broadcast task error: {exc}")
+        except Exception as e:
+            logger.warning(f"[TrackingHub] Error inspecting task completion: {e}")
+
+    @staticmethod
+    def _handle_future_result(future: concurrent.futures.Future) -> None:
+        """Callback to log exceptions from cross-thread Futures without blocking or crashing."""
+        try:
+            if not future.cancelled():
+                exc = future.exception()
+                if exc:
+                    logger.warning(f"[TrackingHub] Cross-thread broadcast future error: {exc}")
+        except Exception as e:
+            logger.warning(f"[TrackingHub] Error inspecting future completion: {e}")
 
     async def connect(self, websocket: WebSocket, emergency_id: Optional[str] = None):
         """Accepts a WebSocket connection and registers it to the appropriate channel."""

@@ -64,55 +64,64 @@ export function renderLocationSimulator(state) {
         <div>
           <span class="text-[11px] text-slate-500 block mb-1.5 font-medium">Quick Waypoint Presets:</span>
           <div class="flex flex-wrap gap-1.5">
-            ${WAYPOINTS.map(wp => `
+            ${WAYPOINTS.map(wp => {
+              const isSelected = Math.abs(latVal - wp.lat) < 0.0001 && Math.abs(lngVal - wp.lng) < 0.0001;
+              return `
               <button
                 type="button"
-                class="btn-apply-waypoint px-2 py-1 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded text-[11px] border border-slate-200 transition font-medium cursor-pointer"
+                class="btn-apply-waypoint px-2.5 py-1 rounded text-[11px] border transition font-medium cursor-pointer shadow-sm ${
+                  isSelected
+                    ? 'bg-rose-50 border-rose-400 text-rose-800 font-bold ring-1 ring-rose-400'
+                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+                }"
                 data-lat="${wp.lat}"
                 data-lng="${wp.lng}"
                 data-addr="${escapeHtml(wp.addr)}"
               >
                 ${escapeHtml(wp.name)}
               </button>
-            `).join('')}
+            `;}).join('')}
           </div>
         </div>
 
         <!-- Coordinate Inputs Grid -->
         <form id="form-location-update" class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
           <div>
-            <label for="sim-lat" class="block text-[11px] font-medium text-slate-600 mb-0.5">Latitude (°N)</label>
+            <label for="sim-lat" class="block text-[11px] font-semibold text-slate-700 mb-1">Latitude (°N)</label>
             <input
               type="number"
-              step="0.0001"
+              step="any"
               min="-90"
               max="90"
               id="sim-lat"
-              class="w-full text-xs font-mono px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-rose-500"
+              class="w-full text-xs font-mono px-3 py-2 bg-white text-slate-900 border border-slate-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500 placeholder-slate-400 shadow-sm"
               value="${latVal.toFixed(4)}"
+              placeholder="12.9716"
               required
             />
           </div>
           <div>
-            <label for="sim-lng" class="block text-[11px] font-medium text-slate-600 mb-0.5">Longitude (°E)</label>
+            <label for="sim-lng" class="block text-[11px] font-semibold text-slate-700 mb-1">Longitude (°E)</label>
             <input
               type="number"
-              step="0.0001"
+              step="any"
               min="-180"
               max="180"
               id="sim-lng"
-              class="w-full text-xs font-mono px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-rose-500"
+              class="w-full text-xs font-mono px-3 py-2 bg-white text-slate-900 border border-slate-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500 placeholder-slate-400 shadow-sm"
               value="${lngVal.toFixed(4)}"
+              placeholder="77.5946"
               required
             />
           </div>
           <div>
-            <label for="sim-addr" class="block text-[11px] font-medium text-slate-600 mb-0.5">Transit Landmark</label>
+            <label for="sim-addr" class="block text-[11px] font-semibold text-slate-700 mb-1">Transit Landmark</label>
             <input
               type="text"
               id="sim-addr"
-              class="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-rose-500"
+              class="w-full text-xs px-3 py-2 bg-white text-slate-900 border border-slate-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500 placeholder-slate-400 shadow-sm"
               value="${escapeHtml(currentAddr)}"
+              placeholder="e.g. Indiranagar 100ft Rd"
             />
           </div>
           <div class="sm:col-span-3 flex justify-end">

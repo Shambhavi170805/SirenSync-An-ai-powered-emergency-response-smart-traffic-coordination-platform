@@ -196,26 +196,38 @@ async def apply_reroute_event(
             detail="Cannot apply reroute: newHospitalId is required."
         )
 
-    updated_amb = AmbulanceDispatchService.apply_reroute(db=db, reroute_event=reroute_event)
-    if not updated_amb:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No active ambulance found for displaced emergency '{reroute_event.emergencyId}'."
+    try:
+        updated_amb = AmbulanceDispatchService.apply_reroute(
+            db=db,
+            reroute_event=reroute_event,
+            commit=False
         )
+        if not updated_amb:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No active ambulance found for displaced emergency '{reroute_event.emergencyId}'."
+            )
 
-    # Broadcast reroute alert to subscribers
+        # Build payload and response DTO before commit while updated_amb is unexpired
+        payload = AmbulanceDispatchService.build_reroute_payload(
+            reroute_event,
+            ambulance=updated_amb
+        )
+        response_dto = AmbulanceDispatchService._to_detail_response(updated_amb)
+
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise
+
+    # Broadcast reroute alert to subscribers strictly post-commit
     await tracking_hub.broadcast_event(
         event_type="REROUTE_ALERT",
-        payload={
-            "eventType": reroute_event.eventType,
-            "emergencyId": reroute_event.emergencyId,
-            "previousHospitalId": reroute_event.previousHospitalId,
-            "newHospitalId": reroute_event.newHospitalId,
-            "reason": reroute_event.reason,
-            "routeProgress": updated_amb.route_progress,
-            "status": "REROUTE_EXECUTED"
-        },
+        payload=payload,
         emergency_id=reroute_event.emergencyId
     )
 
-    return AmbulanceDispatchService._to_detail_response(updated_amb)
+    return response_dto

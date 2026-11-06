@@ -211,7 +211,7 @@ def test_concurrency_race_condition_zero_double_assignment(db_session: Session):
         db_session.add(w_emg)
     db_session.commit()
 
-    from tests.conftest import TestingSessionLocal
+    from conftest import TestingSessionLocal
 
     results = []
     lock = threading.Lock()
@@ -291,7 +291,7 @@ def test_update_status_rejects_manual_assignment(db_session: Session):
 def test_update_status_rejects_mission_transition_without_assignment(db_session: Session):
     """
     Verifies that AmbulanceDispatchService.update_status() rejects transitions
-    into active mission stages (e.g. EN_ROUTE_HOSPITAL) when the ambulance has no
+    into active mission stages (e.g. EN_ROUTE_PICKUP) when the ambulance has no
     assigned emergency or destination hospital.
     """
     amb_id = f"amb-no-assign-{uuid.uuid4().hex[:6]}"
@@ -318,5 +318,5 @@ def test_update_status_rejects_mission_transition_without_assignment(db_session:
         AmbulanceDispatchService.update_status(
             db=db_session,
             ambulance_id=amb_id,
-            new_status=AmbulanceStatusEnum.EN_ROUTE_HOSPITAL,
+            new_status=AmbulanceStatusEnum.EN_ROUTE_PICKUP,
         )

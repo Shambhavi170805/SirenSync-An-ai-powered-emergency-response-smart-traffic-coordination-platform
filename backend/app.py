@@ -1,8 +1,10 @@
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.config import settings
 from backend.database.init_db import init_db
+from backend.services.tracking_service import tracking_hub
 from backend.routers import (
     hospitals_router,
     beds_router,
@@ -16,9 +18,17 @@ from backend.routers import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Ensure database schema is initialized on startup
-    init_db()
-    yield
+    # Register active application event loop with tracking hub
+    loop = asyncio.get_running_loop()
+    tracking_hub.set_event_loop(loop)
+
+    try:
+        # Ensure database schema is initialized on startup
+        init_db()
+        yield
+    finally:
+        # Clear registered event loop upon server shutdown
+        tracking_hub.set_event_loop(None)
 
 app = FastAPI(
     title=settings.APP_NAME,

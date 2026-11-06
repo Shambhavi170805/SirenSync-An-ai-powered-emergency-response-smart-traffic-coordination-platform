@@ -10,6 +10,7 @@ import { renderAssignmentCard } from './components/AssignmentCard.js';
 import { renderWorkflowActions } from './components/WorkflowActions.js';
 import { renderLocationSimulator } from './components/LocationSimulator.js';
 import { renderRerouteBanner } from './components/RerouteBanner.js';
+import { MapView } from './components/MapView.js';
 
 class DriverDashboardApp {
   constructor() {
@@ -19,6 +20,7 @@ class DriverDashboardApp {
       selectedAmbulance: null,
       destinationHospital: null,
       rerouteAlert: null,
+      lastRerouteEventId: null,
       wsConnected: false,
       usingRestFallback: false,
       isRefreshing: false,
@@ -30,6 +32,7 @@ class DriverDashboardApp {
     this.wsHeartbeatTimer = null;
     this.wsReconnectTimer = null;
     this.restFallbackTimer = null;
+    this.mapView = new MapView();
   }
 
   async init() {
@@ -63,6 +66,9 @@ class DriverDashboardApp {
   }
 
   async selectAmbulance(ambulanceId, shouldToast = true) {
+    if (this.state.selectedAmbulanceId !== ambulanceId) {
+      this.state.lastRerouteEventId = null;
+    }
     this.state.selectedAmbulanceId = ambulanceId;
     this.state.rerouteAlert = null;
     this.state.destinationHospital = null;
@@ -372,6 +378,14 @@ class DriverDashboardApp {
       if (payload.ambulanceId && payload.ambulanceId !== targetAmbId) return;
       if (!payload.emergencyId || payload.emergencyId !== targetEmgId) return;
 
+      // Deduplicate by eventId: ignore identical events before toast, fetch, or render
+      if (payload.eventId) {
+        if (this.state.lastRerouteEventId === payload.eventId) {
+          return;
+        }
+        this.state.lastRerouteEventId = payload.eventId;
+      }
+
       this.state.rerouteAlert = payload;
       this.showToast('🚨 URGENT REROUTE: Destination hospital reassigned!', 'warning');
       // Refresh destination hospital from authoritative backend
@@ -421,6 +435,7 @@ class DriverDashboardApp {
         // If finished mission (transitioned to AVAILABLE), clear emergency channel
         if (targetStatus === 'AVAILABLE') {
           this.state.rerouteAlert = null;
+          this.state.lastRerouteEventId = null;
           this.state.destinationHospital = null;
           this.cleanupWebSocket();
         }
@@ -594,27 +609,63 @@ class DriverDashboardApp {
     }
   }
 
+  ensureShellStructure() {
+    const mainContent = document.getElementById('main-content');
+    if (!mainContent) return false;
+
+    // Check if persistent layout slots already exist
+    if (!document.getElementById('map-view-slot')) {
+      mainContent.innerHTML = `
+        <div id="reroute-banner-slot"></div>
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- Left Column: Assignment, Map, and Workflow Actions (7 cols) -->
+          <div class="lg:col-span-7 space-y-6">
+            <div id="assignment-card-slot"></div>
+            <div id="map-view-slot"></div>
+            <div id="workflow-actions-slot"></div>
+          </div>
+
+          <!-- Right Column: Location & Progress Telemetry Simulator (5 cols) -->
+          <div class="lg:col-span-5 space-y-6">
+            <div id="location-simulator-slot"></div>
+          </div>
+        </div>
+      `;
+
+      // Mount MapView once inside the persistent map-view-slot
+      this.mapView.mount('map-view-slot');
+    }
+    return true;
+  }
+
   render() {
     this.renderHeaderOnly();
 
-    const mainContent = document.getElementById('main-content');
-    if (!mainContent) return;
+    if (!this.ensureShellStructure()) return;
 
-    mainContent.innerHTML = `
-      ${renderRerouteBanner(this.state, () => this.handleAcknowledgeReroute())}
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <!-- Left Column: Assignment & Workflow Actions (7 cols) -->
-        <div class="lg:col-span-7 space-y-6">
-          ${renderAssignmentCard(this.state)}
-          ${renderWorkflowActions(this.state)}
-        </div>
+    // Render dynamic components into their respective sub-slots
+    const rerouteSlot = document.getElementById('reroute-banner-slot');
+    if (rerouteSlot) {
+      rerouteSlot.innerHTML = renderRerouteBanner(this.state, () => this.handleAcknowledgeReroute());
+    }
 
-        <!-- Right Column: Location & Progress Telemetry Simulator (5 cols) -->
-        <div class="lg:col-span-5 space-y-6">
-          ${renderLocationSimulator(this.state)}
-        </div>
-      </div>
-    `;
+    const assignmentSlot = document.getElementById('assignment-card-slot');
+    if (assignmentSlot) {
+      assignmentSlot.innerHTML = renderAssignmentCard(this.state);
+    }
+
+    const workflowSlot = document.getElementById('workflow-actions-slot');
+    if (workflowSlot) {
+      workflowSlot.innerHTML = renderWorkflowActions(this.state);
+    }
+
+    const simulatorSlot = document.getElementById('location-simulator-slot');
+    if (simulatorSlot) {
+      simulatorSlot.innerHTML = renderLocationSimulator(this.state);
+    }
+
+    // Update map view with latest telemetry state (reusing existing markers, non-jarring bounds)
+    this.mapView.update(this.state);
 
     this.attachEventListeners();
   }
@@ -667,19 +718,54 @@ class DriverDashboardApp {
     }
 
     // Waypoint preset pills
+    const syncWaypointHighlights = () => {
+      const currentLat = parseFloat(document.getElementById('sim-lat')?.value);
+      const currentLng = parseFloat(document.getElementById('sim-lng')?.value);
+      document.querySelectorAll('.btn-apply-waypoint').forEach(b => {
+        const wpLat = parseFloat(b.getAttribute('data-lat'));
+        const wpLng = parseFloat(b.getAttribute('data-lng'));
+        const matches = Number.isFinite(currentLat) && Number.isFinite(currentLng) &&
+          Math.abs(currentLat - wpLat) < 0.0001 && Math.abs(currentLng - wpLng) < 0.0001;
+        if (matches) {
+          b.classList.remove('bg-white', 'border-slate-300', 'text-slate-700');
+          b.classList.add('bg-rose-50', 'border-rose-400', 'text-rose-800', 'font-bold', 'ring-1', 'ring-rose-400');
+        } else {
+          b.classList.remove('bg-rose-50', 'border-rose-400', 'text-rose-800', 'font-bold', 'ring-1', 'ring-rose-400');
+          b.classList.add('bg-white', 'border-slate-300', 'text-slate-700');
+        }
+      });
+    };
+
     document.querySelectorAll('.btn-apply-waypoint').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const lat = parseFloat(e.currentTarget.getAttribute('data-lat'));
-        const lng = parseFloat(e.currentTarget.getAttribute('data-lng'));
-        const addr = e.currentTarget.getAttribute('data-addr');
+        const btnElem = e.currentTarget;
+        const lat = parseFloat(btnElem.getAttribute('data-lat'));
+        const lng = parseFloat(btnElem.getAttribute('data-lng'));
+        const addr = btnElem.getAttribute('data-addr');
         const latInput = document.getElementById('sim-lat');
         const lngInput = document.getElementById('sim-lng');
         const addrInput = document.getElementById('sim-addr');
-        if (latInput && Number.isFinite(lat)) latInput.value = lat.toFixed(4);
-        if (lngInput && Number.isFinite(lng)) lngInput.value = lng.toFixed(4);
-        if (addrInput) addrInput.value = addr || '';
+        if (latInput && Number.isFinite(lat)) {
+          latInput.value = lat.toFixed(4);
+          latInput.dispatchEvent(new Event('input', { bubbles: true }));
+          latInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        if (lngInput && Number.isFinite(lng)) {
+          lngInput.value = lng.toFixed(4);
+          lngInput.dispatchEvent(new Event('input', { bubbles: true }));
+          lngInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        if (addrInput) {
+          addrInput.value = addr || '';
+          addrInput.dispatchEvent(new Event('input', { bubbles: true }));
+          addrInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        syncWaypointHighlights();
       });
     });
+
+    document.getElementById('sim-lat')?.addEventListener('input', syncWaypointHighlights);
+    document.getElementById('sim-lng')?.addEventListener('input', syncWaypointHighlights);
 
     // Location update form
     const locForm = document.getElementById('form-location-update');
