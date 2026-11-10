@@ -38,6 +38,13 @@ class SimulatedSignalController:
             for junction_id in junction_ids:
                 self._state(junction_id)
 
+    def register_junction(self, junction: dict) -> None:
+        """Register a route-discovered intersection and its approach direction."""
+        junction_id = junction["junction_id"]
+        with self._lock:
+            self.junction_directions[junction_id] = junction.get("ambulance_direction", "north_south")
+            self._state(junction_id)
+
     def _state(self, junction_id: str) -> dict:
         state = self._junctions.setdefault(junction_id, self._new_state())
         state["ambulance_direction"] = self.junction_directions.get(junction_id, state["ambulance_direction"])
