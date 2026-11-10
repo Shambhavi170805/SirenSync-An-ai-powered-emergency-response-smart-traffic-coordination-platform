@@ -1,35 +1,74 @@
-# Registered-Plate Green Corridor
+# SirenSync Route-Specific Green Corridor
 
-This is Ishita's isolated AI traffic module. It is a separate service and dashboard so the supplied patient, hospital, and ambulance code stays unchanged.
+This is Ishita's traffic module. It is isolated under `ai_traffic/registered_corridor`; it does not edit the patient, hospital, or ambulance modules.
 
-The dashboard uses an interactive OpenStreetMap street layer. It draws the route geometry supplied by ambulance dispatch/tracking and moves the ambulance marker along that geometry using route progress/GPS. The map does not calculate road directions itself: dispatch must send its road-following polyline (`route_points`). If only origin and destination are supplied, the fallback is a straight line and will not follow streets. Map tiles require an internet connection and show OpenStreetMap attribution. The visible map area is requested from the tile provider; the ambulance plate and full route polyline are not sent to that provider.
+## Pilot area and flow
 
-## How the module works
+The first pilot covers the Bengaluru Urban area in the supplied hospital sample. It contains five hospitals, while the number and locations of monitored junctions are discovered separately for each selected trip. The module does not use a fixed three-junction list.
 
-1. The selected hospital coordinates the ambulance response. Nidhi's backend allocates a route and knows the ambulance database ID plus its `vehicle_number`.
-2. After allocation, the dispatch/route producer posts the active ambulance ID, registered vehicle number, route points, and junction list to this service's `POST /route` endpoint.
-3. A configured road camera reads number plates. Live camera feeds use OpenCV plate localization and Tesseract OCR. Only an exact normalized number in `registry.json` that belongs to an active route is verified.
-4. A verified plate at a configured route junction, or a verified ambulance GPS update inside the configured approach radius, requests corridor priority. Unregistered plates and plates with no active route do not change signals.
-5. The virtual signals run `CLEARING_TO_CORRIDOR` (conflicting green turns amber) → `ALL_RED_TO_CORRIDOR` → `EMERGENCY_GREEN`. After the tracked ambulance passes, they run `CLEARING_AFTER_PASS` → `ALL_RED_TO_NORMAL` → the configured normal cycle. A maximum-green timer prevents a simulated phase from staying green forever.
+1. Shambhavi provides the patient's location, selected hospital ID, and (when available) the selected road route as ordered `routePoints`.
+2. `POST /api/route/plan` uses the supplied route points when present, map-matches that path to the road network, and discovers its intersections. It calculates up to three local OSM route choices only when no upstream route points were supplied.
+3. Dispatch selects a route and allocates an ambulance to it with `POST /route`. The module checks the registered ambulance and attaches the route to its emergency.
+4. A configured camera reads the vehicle plate. An exact registered plate on the active route verifies the ambulance. Camera feeds with known coordinates are associated with the closest discovered route junction; a local test webcam without coordinates is associated with the route entry.
+5. GPS from the tracking API advances the ambulance along the route. As it approaches each discovered junction, that junction's simulated signal clears cross traffic, gives the ambulance a green phase, and returns to its normal cycle after the ambulance passes.
 
-**This module never sends commands to physical traffic lights.** The built-in sample camera draws a sample plate and marks its own generated plate as deterministic simulated sensor metadata. It does not perform real OCR. Live camera mode uses OpenCV and Tesseract and requires a configured camera feed, the Python package, and the native Tesseract executable. The dashboard reports clearly whether it is in synthetic or live mode.
+OSRM uses OpenStreetMap road data to map-match a supplied route and identify its intersections; the local fallback requests a route when Shambhavi's path is unavailable. Neither provides live congestion predictions. See the [OSRM Match service documentation](https://project-osrm.org/docs/v26.4.0/http#match-service) and [Route service documentation](https://project-osrm.org/docs/v26.4.0/http#route-service).
 
-## Run the backend and frontend
+**Signals are simulated. This module does not control physical traffic lights.** A laptop webcam is a local camera-pipeline input, not a junction CCTV feed. Use an authorized accessible camera feed for a field pilot. Number-plate OCR, camera placement, GPS, and signal timing need field validation before road deployment.
+
+## Run locally
 
 From the repository root in PowerShell:
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r ai_traffic/registered_corridor/requirements.txt
-python -m uvicorn ai_traffic.registered_corridor.api:app --host 127.0.0.1 --port 8010 --reload
+& C:\Users\ishit\.venv\Scripts\python.exe -m pip install -r ai_traffic/registered_corridor/requirements.txt
+& C:\Users\ishit\.venv\Scripts\python.exe -m uvicorn ai_traffic.registered_corridor.api:app --host 127.0.0.1 --port 8010 --reload
 ```
 
-Open [http://127.0.0.1:8010](http://127.0.0.1:8010). The backend serves the frontend from this module's `frontend/index.html`; it does not replace the team's patient or driver frontends. The sample dispatch button allocates a sample route, starts the camera feed and simulates GPS progress.
+Open [http://127.0.0.1:8010](http://127.0.0.1:8010). Enter the patient latitude/longitude from Shambhavi and choose the hospital selected for the emergency. If testing manually, open **Optional: use Shambhavi's selected route** and paste its ordered `[{"lat": ..., "lng": ...}]` route points. The map then displays that selected path with its detected intersections. Leave it blank for the local OSM fallback. Use **Run simulated camera/GPS demonstration** for the sample plate and virtual signal sequence, or allocate an active ambulance after dispatch.
 
-## Connect after Nidhi's route allocation
+Route planning needs an internet connection to the configured routing server. The default is the public OSRM demo endpoint for a small prototype. Set `SIRENSYNC_ROUTER_BASE_URL` to a compatible OSRM service if you run your own. For field or high-volume use, host and operate a routing service under the project team's control.
 
-The route API uses the team's ambulance ID and registered `vehicle_number`. It accepts the shared AI-traffic `route_points` / `junctions` shape and also the ambulance response's camelCase names:
+## Shambhavi and hospital handoff
+
+The route planner accepts the patient-location shape used by Shambhavi and the chosen hospital ID:
+
+```http
+POST http://127.0.0.1:8010/api/route/plan
+Content-Type: application/json
+```
+
+```json
+{
+  "emergencyId": "emg-9821a",
+  "patientLocation": {"latitude": 12.9716, "longitude": 77.5946},
+  "hospitalId": "hosp-manipal-hal",
+  "routePoints": [
+    {"lat": 12.9716, "lng": 77.5946},
+    {"lat": 12.9742, "lng": 77.5991},
+    {"lat": 12.9592, "lng": 77.6477}
+  ]
+}
+```
+
+`routePoints` is optional and must be an ordered road path inside the configured pilot area. It can be sent as `routePoints` or `route_points`; GeoJSON `routeGeometry.coordinates` is also accepted. When it is present, the module map-matches that path and does not choose a different origin-to-hospital route. The response labels the source as `SHAMBHAVI_SELECTED_ROUTE`. If omitted, it labels the locally calculated fallback as `LOCAL_OSM_FALLBACK`.
+
+`GET /api/hospitals` returns the local five-hospital pilot directory. With Nidhi's API integration enabled, it reads the team's `/api/v1/hospitals` directory instead and limits the choices to the pilot area's configured bounds. The location passed to `/api/route/plan` must also fall inside those bounds.
+
+The response contains `route_plan_id` and one or more `options`. Each option includes `route_points`, `junctions`, `distance_m`, and `duration_s`. The UI lets the operator choose an option before ambulance allocation.
+
+## Nidhi ambulance tracking API handoff
+
+The consumer is disabled by default, so the local sample can run without Nidhi's server. Enable it in the same PowerShell terminal before launching:
+
+```powershell
+$env:SIRENSYNC_TRACKING_API_ENABLED = "true"
+$env:SIRENSYNC_TRACKING_API_BASE_URL = "http://127.0.0.1:8000/api/v1"
+$env:SIRENSYNC_TRACKING_WS_URL = "ws://127.0.0.1:8000/api/v1/tracking/ws"
+& C:\Users\ishit\.venv\Scripts\python.exe -m uvicorn ai_traffic.registered_corridor.api:app --host 127.0.0.1 --port 8010 --reload
+```
+
+After a route plan is selected, dispatch allocates the ambulance through:
 
 ```http
 POST http://127.0.0.1:8010/route
@@ -38,47 +77,40 @@ Content-Type: application/json
 
 ```json
 {
-  "ambulanceId": "AMB-001",
+  "ambulanceId": "amb-bengaluru-als-01",
   "vehicleNumber": "KA03AB1234",
-  "emergencySeverity": "CRITICAL",
-  "junctions": ["J-101", "J-102"],
-  "routePoints": [
-    {"lat": 12.9680, "lng": 77.5910},
-    {"lat": 12.9716, "lng": 77.5946},
-    {"lat": 12.9758, "lng": 77.6012}
-  ]
+  "emergencyId": "emg-9821a",
+  "routePlanId": "<route_plan_id from the plan response>",
+  "routeOption": 0
 }
 ```
 
-The same fields can be snake_case (`ambulance_id`, `vehicle_number`, `route_points`). If Nidhi's route provider has only origin/destination, send `origin` and `destination` as `"latitude,longitude"`; the module makes a straight sample route between them. For junction-accurate corridor timing, send the route polyline and ordered junction IDs.
+Before allocating, the traffic module checks Nidhi's `/api/v1/ambulances/by-emergency/{emergencyId}` response for the ambulance ID, registered plate, emergency assignment, and active status. It then subscribes to `/api/v1/tracking/ws` for that emergency and consumes its `SNAPSHOT`, `LOCATION_UPDATE`, `ROUTE_PROGRESS_UPDATE`, and `STATUS_CHANGE` events. It does not modify Nidhi's code or write location updates back to her API. `GET /api/health` shows adapter connection status.
 
-Forward Nidhi's route progress to `POST http://127.0.0.1:8010/route/progress` alongside the existing team telemetry call:
+The shared Nidhi API currently streams live GPS and route-progress events but does not include the selected road-route polyline. Shambhavi or the dispatch handoff therefore needs to send `routePoints` to `/api/route/plan`; Nidhi's location updates then move the ambulance on that exact planned path. Without those points, the module labels its OSRM route as a local fallback. A reroute to another hospital/path needs a new route plan and allocation. If a tracking update is far from the selected route, it is rejected and logged rather than activating the wrong junction.
 
-```json
-{
-  "ambulanceId": "AMB-001",
-  "routeProgress": 28.0,
-  "latitude": 12.9709,
-  "longitude": 77.5940
-}
-```
+## Camera setup
 
-Coordinates are optional; progress is sufficient for the sample route interpolation. The existing tracking backend calls remain the source of truth for ambulance and patient tracking.
+- `CAM-PILOT-LIVE` opens webcam `0` by default for local camera/OCR trials.
+- `CAM-PILOT-DEMO` is a generated feed with simulated plate metadata; it is only for the end-to-end demo.
+- To use an accessible camera stream, set `SIRENSYNC_CAMERA_URL` to its webcam index or RTSP URL. Set `SIRENSYNC_CAMERA_LAT` and `SIRENSYNC_CAMERA_LNG` to the camera's actual map location so the module associates it with the nearest discovered junction. Do not put camera credentials in committed files.
+- Live OCR uses OpenCV plate-region localization and Tesseract. The same normalized plate must be read in two consecutive scans and exactly match the current registered plate. Install Tesseract OCR and set `TESSERACT_CMD` if it is not on `PATH`.
+- More cameras can be added to the `cameras` array in `config.json`, with a unique ID, source URL, and actual `lat`/`lng` coordinates. Each feed can then map to the nearest junction on the selected route.
 
-## Configure number plates and live cameras
+The `.env.example` file lists the optional settings. This service does not load `.env` files automatically.
 
-- `registry.json` is the traffic module's local allow-list. Copy the ambulance ID and `vehicle_number` from Nidhi's fleet records; normalize differences in spaces/hyphens automatically. The incoming route is rejected unless both values match the allow-list.
-- `config.json` stores junction coordinates, camera-to-junction associations, approach distance and signal timings. The map uses these coordinates for junction markers.
-- The dispatch route's `route_points` must be its ordered, road-following polyline for the blue line and moving ambulance to match the actual streets. Do not send only two endpoints if the route was already computed elsewhere.
-- For a webcam, set a camera's `source` to `camera` and `url` to `"0"`. For a permitted RTSP feed, set `url` to its RTSP URL. Do not place camera passwords in a committed config file.
-- Live OCR needs Tesseract installed on the computer. If the executable is not on `PATH`, set `TESSERACT_CMD` to its full path before starting the backend.
+## Pilot area settings
 
-## API and live frontend events
+- `hospitals.json` contains the five local sample hospitals sourced from the supplied team seed data.
+- `config.json` defines the Bengaluru pilot boundary, signal timing, local camera feed definitions, and map center. The boundary is a development scope, not a statement that every road in that area has a camera.
+- Junction coordinates are generated per route from OSM routing results and registered only for that trip. To expand the pilot, update the area boundary and hospital/camera directory; junctions remain route-derived.
 
-- `GET /api/health`, `/api/registry`, `/api/routes`, `/api/signals`, `/api/events`
-- `GET /video/{camera_id}` for an annotated MJPEG camera stream
-- `POST /route` and `/route/progress` for the upstream route/telemetry contract
-- `POST /api/demo/start` for the isolated sample demo
-- `ws://127.0.0.1:8010/ws/events` for `ROUTE_ALLOCATED`, `PLATE_VERIFIED`, `PLATE_REJECTED`, `CORRIDOR_REQUESTED`, `SIGNAL_CHANGED`, `JUNCTION_PASSED`, and `ROUTE_UPDATED`
+## Endpoints
 
-The local plate allow-list is for prototype integration. In a deployment, the fleet service should provide an authenticated registry lookup, and physical signal control would require a separate authorized, fail-safe municipal integration.
+- `GET /api/health`, `/api/hospitals`, `/api/registry`, `/api/routes`, `/api/junctions`, `/api/signals`, `/api/events`
+- `POST /api/route/plan` plans a street route and finds its intersections
+- `POST /route` allocates a selected route to a registered ambulance
+- `POST /route/progress` accepts a direct GPS/progress update when the tracking API consumer is off
+- `POST /api/demo/start` runs the selected plan with the local sample camera (disabled in API-connected mode)
+- `GET /video/{camera_id}` serves the selected annotated camera feed
+- `ws://127.0.0.1:8010/ws/events` streams plate, route, junction, and simulated signal events
