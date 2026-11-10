@@ -1,0 +1,10 @@
+{
+  "area": "Bengaluru Urban pilot dataset",
+  "hospitals": [
+    {"id": "hosp-manipal-hal", "name": "Manipal Hospital HAL Airport Road", "address": "98, HAL Old Airport Rd, Kodihalli, Bengaluru", "latitude": 12.9592, "longitude": 77.6477},
+    {"id": "hosp-apollo-bg", "name": "Apollo Hospitals Bannerghatta Road", "address": "Bannerghatta Road, Bengaluru", "latitude": 12.8942, "longitude": 77.5990},
+    {"id": "hosp-fortis-cunningham", "name": "Fortis Hospital Cunningham Road", "address": "Cunningham Road, Vasanth Nagar, Bengaluru", "latitude": 12.9868, "longitude": 77.5975},
+    {"id": "hosp-columbia-hebbal", "name": "Columbia Asia Hospital Hebbal", "address": "Bellary Road, Hebbal, Bengaluru", "latitude": 13.0354, "longitude": 77.5898},
+    {"id": "hosp-bowring-shivaji", "name": "Bowring and Lady Curzon Hospital", "address": "Lady Curzon Road, Shivaji Nagar, Bengaluru", "latitude": 12.9829, "longitude": 77.6047}
+  ]
+}
