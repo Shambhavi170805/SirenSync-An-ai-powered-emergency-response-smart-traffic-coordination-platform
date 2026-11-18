@@ -1,20 +1,20 @@
 import React, { useState } from 'react';
-import { 
-  Car, 
-  HeartPulse, 
-  Wind, 
-  AlertCircle, 
-  PlusCircle, 
-  MapPin, 
-  Navigation, 
-  Phone, 
-  User, 
-  Users, 
-  CheckCircle2, 
-  XCircle, 
-  HelpCircle, 
-  ChevronDown, 
-  ChevronUp, 
+import {
+  Car,
+  HeartPulse,
+  Wind,
+  AlertCircle,
+  PlusCircle,
+  MapPin,
+  Navigation,
+  Phone,
+  User,
+  Users,
+  CheckCircle2,
+  XCircle,
+  HelpCircle,
+  ChevronDown,
+  ChevronUp,
   ArrowRight,
   ShieldAlert,
   Loader2,
@@ -24,23 +24,30 @@ import {
 import { emergencyTypes, whoNeedsHelpOptions, patientConditionOptions } from '../data/mockData';
 import MedicalDocumentUpload from './MedicalDocumentUpload';
 import HumanVerification from './HumanVerification';
+import emergencyService from '../services/emergencyService';
 
-export default function QuickEmergencyForm({ 
-  patientProfile, 
-  onSubmitEmergency, 
-  onCancel = null 
+export default function QuickEmergencyForm({
+  patientProfile,
+  onSubmitEmergency,
+  onCancel = null
 }) {
   // Form State
+  const [region, setRegion] = useState('Dehradun');
   const [location, setLocation] = useState(
-    patientProfile?.currentLocation?.address || 'Rajpur Road, Dehradun, Uttarakhand'
+    patientProfile?.currentLocation?.address || 'Rajpur Road, Clock Tower, Dehradun'
   );
+  const [coordinates, setCoordinates] = useState({
+    latitude: patientProfile?.currentLocation?.coordinates?.lat || 30.3255,
+    longitude: patientProfile?.currentLocation?.coordinates?.lng || 78.0437
+  });
   const [locationStatus, setLocationStatus] = useState('idle'); // 'idle' | 'locating' | 'success' | 'error'
   const [locationError, setLocationError] = useState(null);
+  const [submissionError, setSubmissionError] = useState(null);
 
   const [category, setCategory] = useState('accident'); // default to 'accident' for emergency-first focus
   const [whoNeedsHelp, setWhoNeedsHelp] = useState('me'); // 'me' | 'someone_else'
   const [patientCondition, setPatientCondition] = useState('conscious'); // 'conscious' | 'unconscious' | 'not_sure'
-  
+
   const [contactNumber, setContactNumber] = useState(
     patientProfile?.phone || '+91 98765 43210'
   );
@@ -61,12 +68,13 @@ export default function QuickEmergencyForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdRequest, setCreatedRequest] = useState(null);
 
-  // Common quick landmark suggestions for 1-tap entry in Dehradun
+  // Common quick landmark suggestions for 1-tap entry in Dehradun EMS corridor
   const quickLandmarks = [
-    "Rajpur Road, Dehradun",
-    "Clock Tower Chowk",
-    "Ballupur Chowk",
-    "ISBT Dehradun"
+    { label: "Clock Tower, Dehradun", address: "Clock Tower, Rajpur Road, Dehradun", lat: 30.3255, lng: 78.0437 },
+    { label: "Rajpur Road, Dehradun", address: "Rajpur Road, Jakhan, Dehradun", lat: 30.3533, lng: 78.0642 },
+    { label: "Ballupur Chowk, Dehradun", address: "Ballupur Chowk, GMS Road, Dehradun", lat: 30.3382, lng: 78.0163 },
+    { label: "Haridwar Road, Dehradun", address: "Haridwar Road, Dharampur, Dehradun", lat: 30.3125, lng: 78.0465 },
+    { label: "Mussoorie Diversion, Dehradun", address: "Mussoorie Diversion Road, Malsi, Dehradun", lat: 30.3740, lng: 78.0750 }
   ];
 
   // Optional symptom chips
@@ -92,9 +100,10 @@ export default function QuickEmergencyForm({
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const lat = position.coords.latitude.toFixed(4);
-        const lng = position.coords.longitude.toFixed(4);
-        const detectedText = `GPS: Lat ${lat}° N, Lng ${lng}° E (Near Rajpur Road, Dehradun)`;
+        const lat = Number(position.coords.latitude.toFixed(6));
+        const lng = Number(position.coords.longitude.toFixed(6));
+        setCoordinates({ latitude: lat, longitude: lng });
+        const detectedText = `GPS Lock (${lat}, ${lng})`;
         setLocation(detectedText);
         setLocationStatus('success');
         setLocationError(null);
@@ -102,9 +111,9 @@ export default function QuickEmergencyForm({
       (error) => {
         setLocationStatus('error');
         if (error.code === 1) { // PERMISSION_DENIED
-          setLocationError('Location permission was denied. Please enter your address or landmark manually below.');
+          setLocationError('Location permission was denied. Please select a landmark or enter address manually below.');
         } else if (error.code === 2) { // POSITION_UNAVAILABLE
-          setLocationError('GPS signal unavailable. Please type your address manually below.');
+          setLocationError('GPS signal unavailable. Please select a landmark or enter address manually below.');
         } else if (error.code === 3) { // TIMEOUT
           setLocationError('Location request timed out. Please enter your location manually below.');
         } else {
@@ -144,7 +153,7 @@ export default function QuickEmergencyForm({
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     // Prevent duplicate submissions
@@ -178,14 +187,37 @@ export default function QuickEmergencyForm({
     // Selected category object
     const selectedCatObj = emergencyTypes.find(t => t.id === category) || emergencyTypes[0];
 
-    // Determine triage severity based on inputs
-    let derivedSeverity = 'High';
-    if (category === 'accident' || category === 'unconscious' || patientCondition === 'unconscious') {
-      derivedSeverity = 'Critical';
+    // Determine triage severity and clinical requirements based on inputs
+    let priorityEnum = 'P2_EMERGENCY';
+    let requiredBedType = 'ICU';
+    let requiredCapabilities = [];
+    let emergencyTypeCode = 'GENERAL_EMERGENCY';
+
+    if (category === 'accident') {
+      emergencyTypeCode = 'TRAUMA_CRITICAL';
+      priorityEnum = 'P1_CRITICAL';
+      requiredBedType = 'TRAUMA_EMERGENCY';
+      requiredCapabilities = ['TRAUMA_LEVEL_1'];
+    } else if (category === 'medical') {
+      emergencyTypeCode = 'CARDIAC_ARREST';
+      priorityEnum = 'P1_CRITICAL';
+      requiredBedType = 'ICU';
+      requiredCapabilities = ['CARDIAC_CATH_LAB', 'ICU_VENTILATOR'];
     } else if (category === 'breathing') {
-      derivedSeverity = 'Critical';
-    } else if (category === 'other' && patientCondition === 'conscious') {
-      derivedSeverity = 'Moderate';
+      emergencyTypeCode = 'RESPIRATORY_DISTRESS';
+      priorityEnum = 'P1_CRITICAL';
+      requiredBedType = 'OXYGEN_HDU';
+      requiredCapabilities = ['ICU_VENTILATOR'];
+    } else if (category === 'unconscious') {
+      emergencyTypeCode = 'UNCONSCIOUS_TRAUMA';
+      priorityEnum = 'P1_CRITICAL';
+      requiredBedType = 'ICU';
+      requiredCapabilities = ['STROKE_UNIT', 'ICU_VENTILATOR'];
+    } else {
+      emergencyTypeCode = 'GENERAL_EMERGENCY';
+      priorityEnum = patientCondition === 'unconscious' ? 'P1_CRITICAL' : 'P3_URGENT';
+      requiredBedType = 'GENERAL_WARD';
+      requiredCapabilities = [];
     }
 
     // Compile symptoms string
@@ -194,52 +226,83 @@ export default function QuickEmergencyForm({
       additionalNotes.trim()
     ].filter(Boolean).join(', ') || `${selectedCatObj.label} emergency reported.`;
 
-    const mockId = `EMG-2026-001`;
+    try {
+      // 1. Submit and persist to backend
+      const res = await emergencyService.createEmergency({
+        emergencyType: emergencyTypeCode,
+        priority: priorityEnum,
+        region: region || 'Dehradun',
+        patientLocation: {
+          latitude: Number(coordinates.latitude),
+          longitude: Number(coordinates.longitude),
+          address: location
+        },
+        requiredBedType: requiredBedType,
+        requiredCapabilities: requiredCapabilities,
+        symptoms: combinedSymptoms,
+        patientId: patientProfile?.id
+      });
 
-    // Request payload including medical attachments & verification metadata
-    const requestPayload = {
-      requestId: mockId,
-      patientName: whoNeedsHelp === 'me' ? (patientProfile?.name || 'Aarav Sharma') : 'Injured Patient (Reported by Bystander)',
-      age: patientProfile?.age || 29,
-      contactNumber: contactNumber,
-      currentLocation: location,
-      emergencyType: selectedCatObj.label,
-      emergencyCategoryId: category,
-      whoNeedsHelp: whoNeedsHelp === 'me' ? 'Me' : 'Someone else',
-      patientCondition: patientCondition === 'conscious' ? 'Conscious' : (patientCondition === 'unconscious' ? 'Unconscious' : 'Not sure'),
-      symptoms: combinedSymptoms,
-      severity: derivedSeverity,
-      // Attached documents metadata (excluding raw binaries from high-level state, storing clean metadata)
-      attachments: attachments.map(f => ({
-        id: f.id,
-        name: f.name,
-        size: f.size,
-        formattedSize: f.formattedSize,
-        type: f.type,
-        isPdf: f.isPdf
-      })),
-      attachmentsCount: attachments.length,
-      // Verification metadata (never secret keys)
-      verification: {
-        status: verificationStatus,
-        provider: import.meta.env?.VITE_TURNSTILE_SITE_KEY ? 'cloudflare-turnstile' : 'dev-sandbox-simulator',
-        token: verificationToken || 'dev-token-simulated',
-        verifiedAt: new Date().toISOString()
-      },
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      status: "Emergency Request Created"
-    };
+      // 2. Build full state representation using authoritative backend record
+      const fullEmergencyRecord = {
+        ...res,
+        region: res.region || region || 'Dehradun',
+        verification: {
+    status: verificationStatus,
+    provider: verificationToken?.startsWith('dev-turnstile-token-')
+      ? 'dev-simulator'
+      : 'cloudflare-turnstile'
+     },
+        requestId: res.emergencyId,
+        emergencyId: res.emergencyId,
+        patientName: whoNeedsHelp === 'me' ? (patientProfile?.name || 'Aarav Sharma') : 'Injured Patient (Reported by Bystander)',
+        age: patientProfile?.age || 29,
+        contactNumber: contactNumber,
+        currentLocation: res.patientLocation?.address || location,
+        coordinates: {
+          latitude: res.patientLocation?.latitude ?? coordinates.latitude,
+          longitude: res.patientLocation?.longitude ?? coordinates.longitude,
+          address: res.patientLocation?.address || location
+        },
+        patientLocation: {
+          latitude: res.patientLocation?.latitude ?? coordinates.latitude,
+          longitude: res.patientLocation?.longitude ?? coordinates.longitude,
+          address: res.patientLocation?.address || location
+        },
+        emergencyType: emergencyTypeCode,
+        emergencyLabel: selectedCatObj.label,
+        priority: res.priority,
+        severity: res.priority === 'P1_CRITICAL' ? 'Critical' : res.priority === 'P2_EMERGENCY' ? 'High' : 'Moderate',
+        requiredBedType: res.requiredBedType,
+        requiredCapabilities: requiredCapabilities,
+        whoNeedsHelp: whoNeedsHelp === 'me' ? 'Me' : 'Someone else',
+        patientCondition: patientCondition === 'conscious' ? 'Conscious' : (patientCondition === 'unconscious' ? 'Unconscious' : 'Not sure'),
+        symptoms: res.symptoms || combinedSymptoms,
+        attachments: attachments.map(f => ({
+          id: f.id,
+          name: f.name,
+          size: f.size,
+          formattedSize: f.formattedSize,
+          type: f.type,
+          isPdf: f.isPdf
+        })),
+        attachmentsCount: attachments.length,
+        status: "Emergency Request Created"
+      };
 
-    // Realistic brief local transition simulation
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setCreatedRequest(requestPayload);
+      setCreatedRequest(fullEmergencyRecord);
 
-      // Brief confirmation view before advancing to hospital recommendations
+      // Transition smoothly to hospital recommendations
       setTimeout(() => {
-        onSubmitEmergency(requestPayload);
-      }, 1400);
-    }, 600);
+        onSubmitEmergency(fullEmergencyRecord);
+      }, 1200);
+
+    } catch (err) {
+      console.error('Failed to persist emergency intake on backend:', err);
+      setSubmissionError(err.message || 'Failed to submit emergency to backend. Please check connection or call 112 directly.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -280,16 +343,16 @@ export default function QuickEmergencyForm({
               <div className="summary-row">
                 <span className="summary-label">Medical Attachments:</span>
                 <span className="summary-val">
-                  {createdRequest.attachmentsCount > 0 
-                    ? `${createdRequest.attachmentsCount} file(s) attached (Local session)` 
+                  {createdRequest.attachmentsCount > 0
+                    ? `${createdRequest.attachmentsCount} file(s) attached (Local session)`
                     : 'None attached'}
                 </span>
               </div>
               <div className="summary-row">
                 <span className="summary-label">Verification:</span>
                 <span className="summary-val" style={{ color: '#059669', fontWeight: 800 }}>
-                  ✓ {createdRequest.verification.provider === 'cloudflare-turnstile' ? 'Cloudflare Turnstile Verified' : 'Dev Simulator Verified'}
-                </span>
+                   {createdRequest.verification?.provider === 'cloudflare-turnstile' ? 'Cloudflare Turnstile Verified' : 'Dev Simulator Verified'}
+                       </span>
               </div>
             </div>
 
@@ -324,8 +387,8 @@ export default function QuickEmergencyForm({
             </div>
           </div>
           {onCancel && (
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={onCancel}
               className="btn btn-secondary btn-cancel-form"
             >
@@ -392,11 +455,18 @@ export default function QuickEmergencyForm({
                 setLocation(e.target.value);
                 if (locationError) setLocationError(null);
               }}
-              placeholder="Enter current road, landmark, or street in Dehradun..."
+              placeholder="Enter current road, landmark, or street (e.g. Rajpur Road, Dehradun)..."
               className="location-text-input"
               aria-required="true"
             />
           </div>
+
+          {/* Resolved Coordinates Badge */}
+          {coordinates && (
+            <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <span>Coordinates: {coordinates.latitude?.toFixed(4)}, {coordinates.longitude?.toFixed(4)}</span>
+            </div>
+          )}
 
           {/* Quick Landmark Chips for 1-Tap Mobile Selection */}
           <div className="quick-landmarks-row">
@@ -405,13 +475,14 @@ export default function QuickEmergencyForm({
               <button
                 key={idx}
                 type="button"
-                className={`landmark-chip ${location === lm ? 'active-landmark-chip' : ''}`}
+                className={`landmark-chip ${location === lm.address ? 'active-landmark-chip' : ''}`}
                 onClick={() => {
-                  setLocation(lm);
+                  setLocation(lm.address);
+                  setCoordinates({ latitude: lm.lat, longitude: lm.lng });
                   setLocationError(null);
                 }}
               >
-                + {lm.split(',')[0]}
+                + {lm.label.split(',')[0]}
               </button>
             ))}
           </div>
@@ -579,7 +650,7 @@ export default function QuickEmergencyForm({
               <label htmlFor="additional-notes-input" className="optional-notes-label">
                 Tap symptom tags to add:
               </label>
-              
+
               <div className="symptom-chips-row">
                 {symptomChips.map((chip, idx) => {
                   const isChipActive = selectedSymptoms.includes(chip);
@@ -632,10 +703,20 @@ export default function QuickEmergencyForm({
         {/* Secondary Disclaimer & Safety Call */}
         <div className="emergency-disclaimer-card">
           <div className="disclaimer-text">
-            <strong>Emergency Advisory:</strong> If you are unable to submit this form or network drops, call 
+            <strong>Emergency Advisory:</strong> If you are unable to submit this form or network drops, call
             <a href="tel:112" className="inline-call-link"> 112 directly</a>.
           </div>
         </div>
+
+        {/* Real Backend Submission Error Alert */}
+        {submissionError && (
+          <div className="location-error-alert" role="alert" style={{ margin: '1rem 0', borderColor: '#ef4444', backgroundColor: '#fef2f2', color: '#b91c1c' }}>
+            <AlertTriangle size={18} aria-hidden="true" style={{ flexShrink: 0 }} />
+            <div>
+              <strong>Emergency Submission Error:</strong> {submissionError}
+            </div>
+          </div>
+        )}
 
         {/* ========================================================
             D. STICKY SUBMIT BUTTON

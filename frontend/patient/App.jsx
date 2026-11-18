@@ -64,6 +64,7 @@ export default function App() {
     setActiveEmergency(prev => ({
       ...prev,
       selectedHospital: hospital,
+      reservation: hospital.reservation || prev?.reservation,
       status: "Hospital Selected"
     }));
     setCurrentPage('selected');

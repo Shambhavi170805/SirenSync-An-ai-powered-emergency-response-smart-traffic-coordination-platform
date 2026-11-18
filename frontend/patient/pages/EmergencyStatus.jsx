@@ -1,36 +1,56 @@
-import React, { useState } from 'react';
-import { 
-  Activity, 
-  Building2, 
-  Clock, 
-  ShieldCheck, 
-  Phone, 
-  AlertCircle, 
-  Truck, 
-  CheckCircle2, 
-  MapPin, 
+import React, { useState, useEffect } from 'react';
+import {
+  Activity,
+  Building2,
+  Clock,
+  ShieldCheck,
+  Phone,
+  AlertCircle,
+  Truck,
+  CheckCircle2,
+  MapPin,
   ArrowLeft,
   Navigation,
   Radio,
   FileCheck2,
-  Sparkles
+  Sparkles,
+  Lock,
+  RefreshCw
 } from 'lucide-react';
 import Timeline from '../components/Timeline';
 import MockMap from '../components/MockMap';
 import { defaultTimelineSteps, mockAssignedAmbulance } from '../data/mockData';
+import emergencyService from '../services/emergencyService';
 
-export default function EmergencyStatus({ 
-  activeEmergency, 
-  onBackToDashboard, 
-  onBackToHospitals 
+export default function EmergencyStatus({
+  activeEmergency,
+  onBackToDashboard,
+  onBackToHospitals
 }) {
   const hospital = activeEmergency?.selectedHospital;
-  const requestId = activeEmergency?.requestId || 'EMG-2026-001';
+  const emergencyId = activeEmergency?.emergencyId || activeEmergency?.requestId || 'EMG-ACTIVE';
+  const reservation = hospital?.reservation || activeEmergency?.reservation;
 
-  // State to simulate advancing timeline steps for mentor demonstration
-  // Default step 3 is "Ambulance Coordination" (index 3)
+  const [liveEmergency, setLiveEmergency] = useState(null);
   const [currentStepIndex, setCurrentStepIndex] = useState(3);
   const [timelineSteps, setTimelineSteps] = useState(defaultTimelineSteps);
+
+  // Poll or query authoritative emergency record on mount
+  useEffect(() => {
+    let isMounted = true;
+    if (activeEmergency?.emergencyId) {
+      emergencyService.getEmergency(activeEmergency.emergencyId)
+        .then(data => {
+          if (isMounted && data) {
+            setLiveEmergency(data);
+          }
+        })
+        .catch(err => {
+          console.warn('Live emergency sync notice:', err);
+        });
+    }
+    return () => { isMounted = false; };
+  }, [activeEmergency?.emergencyId]);
 
   const handleAdvanceStep = () => {
     if (currentStepIndex < timelineSteps.length - 1) {
@@ -44,11 +64,17 @@ export default function EmergencyStatus({
 
   const currentStepTitle = timelineSteps[currentStepIndex]?.title || "Hospital Selected";
 
+  const hospitalName = hospital?.name || hospital?.coordinatingHospital?.name || "Selected Hospital";
+  const hospitalAddress = hospital?.location?.address || hospital?.address || "Emergency Medical Corridor";
+  const contactNumber = hospital?.contactNumber || hospital?.coordinatingHospital?.contactNumber || "+91 80 2502 4444";
+  const distanceKm = hospital?.breakdown?.distanceKm !== undefined ? Number(hospital.breakdown.distanceKm).toFixed(1) : (hospital?.distanceKm || '3.5');
+  const etaMinutes = hospital?.etaMinutes || Math.max(3, Math.round(Number(distanceKm) * 2.5));
+
   return (
     <div className="main-content">
       {/* Header breadcrumb & controls */}
       <div style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
-        <button 
+        <button
           onClick={onBackToDashboard}
           className="btn btn-secondary"
           style={{ fontSize: '0.85rem', padding: '0.45rem 0.85rem', gap: '6px' }}
@@ -82,16 +108,16 @@ export default function EmergencyStatus({
               </span>
             </div>
             <h1 style={{ fontSize: '1.85rem', fontWeight: 900, color: '#0f172a', marginTop: '4px' }}>
-              Emergency ID: {requestId}
+              Emergency ID: {emergencyId}
             </h1>
           </div>
 
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <span className="badge badge-critical" style={{ fontSize: '0.85rem', padding: '6px 12px' }}>
-              {activeEmergency?.severity || 'Critical'}
+              {activeEmergency?.severity || activeEmergency?.triagePriority || 'P1_CRITICAL'}
             </span>
             <span className="badge badge-info" style={{ fontSize: '0.85rem', padding: '6px 12px' }}>
-              {activeEmergency?.emergencyType || 'Cardiac Emergency'}
+              {activeEmergency?.emergencyType || 'CARDIAC_ARREST'}
             </span>
           </div>
         </div>
@@ -101,28 +127,31 @@ export default function EmergencyStatus({
           {/* Selected Hospital */}
           <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '1.25rem' }}>
             <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: '#64748b', fontWeight: 700, letterSpacing: '0.03em' }}>
-              Selected Hospital
+              Receiving Emergency Facility
             </div>
             <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Building2 size={20} color="#0284c7" />
-              <span>{hospital?.name || "Max Super Speciality Hospital"}</span>
+              <span>{hospitalName}</span>
             </div>
             <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px' }}>
-              {hospital?.address || "Mussoorie Diversion Road, Dehradun"}
+              {hospitalAddress}
+            </div>
+            <div style={{ fontSize: '0.8rem', color: '#0284c7', marginTop: '6px', fontWeight: 600 }}>
+              Hotline: {contactNumber}
             </div>
           </div>
 
           {/* Current Status */}
           <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '14px', padding: '1.25rem' }}>
             <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: '#065f46', fontWeight: 700, letterSpacing: '0.03em' }}>
-              Current Status
+              Bed & Dispatch Status
             </div>
             <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#065f46', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <CheckCircle2 size={20} color="#059669" />
-              <span>"{currentStepTitle}"</span>
+              <Lock size={18} color="#059669" />
+              <span>Bed Reserved (CAS Lock)</span>
             </div>
             <div style={{ fontSize: '0.8rem', color: '#047857', marginTop: '4px' }}>
-              State synced via SirenSync Local Bus
+              Token: <strong>{reservation?.reservationId || reservation?.reservation_id || 'CONFIRMED'}</strong>
             </div>
           </div>
 
@@ -133,10 +162,10 @@ export default function EmergencyStatus({
             </div>
             <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#dc2626', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Clock size={20} color="#dc2626" />
-              <span>{hospital?.etaMinutes || 11} Minutes</span>
+              <span>{etaMinutes} Minutes</span>
             </div>
             <div style={{ fontSize: '0.8rem', color: '#b91c1c', marginTop: '4px' }}>
-              Green Corridor Traffic wave allocated
+              Distance: {distanceKm} km (Corridor Optimized)
             </div>
           </div>
         </div>
@@ -158,10 +187,10 @@ export default function EmergencyStatus({
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Radio size={18} color="#16a34a" />
             <span>
-              <strong>Receiving Emergency Department Prepped:</strong> Trauma Bay and Cardiac Cath Lab reserved. Patient vitals stream queued.
+              <strong>Receiving Hospital Emergency Desk:</strong> Emergency bed atomically locked. Triage queue updated in real-time.
             </span>
           </div>
-          <button 
+          <button
             onClick={onBackToHospitals}
             className="btn btn-secondary"
             style={{ padding: '0.3rem 0.75rem', fontSize: '0.75rem' }}
@@ -188,7 +217,7 @@ export default function EmergencyStatus({
           </div>
 
           {/* Timeline Component */}
-          <Timeline 
+          <Timeline
             steps={timelineSteps}
             currentStepIndex={currentStepIndex}
             onAdvanceStep={handleAdvanceStep}
@@ -243,14 +272,14 @@ export default function EmergencyStatus({
             {/* Call button */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.85rem' }}>
               <span style={{ color: '#64748b' }}>Emergency Comms Hotline:</span>
-              <a 
+              <a
                 href={`tel:${mockAssignedAmbulance.phone}`}
-                style={{ 
-                  color: '#dc2626', 
-                  fontWeight: 800, 
-                  textDecoration: 'none', 
-                  display: 'flex', 
-                  alignItems: 'center', 
+                style={{
+                  color: '#dc2626',
+                  fontWeight: 800,
+                  textDecoration: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
                   gap: '4px',
                   background: '#fef2f2',
                   padding: '4px 10px',
@@ -276,7 +305,7 @@ export default function EmergencyStatus({
               </span>
             </div>
 
-            <MockMap 
+            <MockMap
               selectedHospitalId={hospital?.id || "hosp-max-ddn"}
               patientLocation={{ address: activeEmergency?.currentLocation || "Rajpur Road, Dehradun" }}
             />

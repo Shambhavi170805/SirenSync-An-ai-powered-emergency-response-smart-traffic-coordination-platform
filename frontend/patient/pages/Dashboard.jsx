@@ -1,10 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { 
-  Siren, 
-  Phone, 
-  ShieldAlert, 
-  ArrowRight, 
-  CheckCircle2, 
+import {
+  Siren,
+  Phone,
+  ShieldAlert,
+  ArrowRight,
+  CheckCircle2,
   AlertTriangle,
   Clock,
   MapPin,
@@ -13,12 +13,12 @@ import {
 } from 'lucide-react';
 import QuickEmergencyForm from '../components/QuickEmergencyForm';
 
-export default function Dashboard({ 
+export default function Dashboard({
   currentUser,
-  patientProfile, 
-  activeEmergency, 
-  onSubmitEmergency, 
-  onNavigate 
+  patientProfile,
+  activeEmergency,
+  onSubmitEmergency,
+  onNavigate
 }) {
   // Whether the quick emergency request form is revealed
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -45,7 +45,7 @@ export default function Dashboard({
             </div>
             <div>
               <div className="active-banner-title">
-                Active Emergency: {activeEmergency.requestId}
+                Active Emergency: {activeEmergency.emergencyId || activeEmergency.requestId}
               </div>
               <div className="active-banner-sub">
                 Type: <strong>{activeEmergency.emergencyType}</strong> • Status: <strong>{activeEmergency.status}</strong>
@@ -80,9 +80,9 @@ export default function Dashboard({
       ) : (
         <div className="patient-guest-notice-banner">
           <span>Emergency assistance is open to all patients without logging in.</span>
-          <button 
-            type="button" 
-            onClick={() => onNavigate('auth')} 
+          <button
+            type="button"
+            onClick={() => onNavigate('auth')}
             className="btn-guest-signin"
           >
             Sign In / Register Profile →
@@ -126,8 +126,8 @@ export default function Dashboard({
               <span className="critical-warning-dot" aria-hidden="true" />
               <span>Immediate life threat? Direct call to police, fire, & medical emergency:</span>
             </div>
-            <a 
-              href="tel:112" 
+            <a
+              href="tel:112"
               className="btn-call-112-prominent"
               aria-label="Direct call to National Emergency Services 112"
             >
@@ -142,9 +142,9 @@ export default function Dashboard({
           C. QUICK EMERGENCY REQUEST FORM (REVEALED ON ACTION)
       ======================================================== */}
       {isFormOpen ? (
-        <section 
-          ref={formRef} 
-          id="quick-emergency-form-panel" 
+        <section
+          ref={formRef}
+          id="quick-emergency-form-panel"
           className="form-reveal-section"
           aria-label="Emergency assistance request form"
         >

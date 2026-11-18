@@ -1,20 +1,20 @@
 import React, { useState } from 'react';
-import { 
-  MapPin, 
-  Navigation2, 
-  Layers, 
-  Building2, 
-  ShieldCheck, 
-  Flame, 
+import {
+  MapPin,
+  Navigation2,
+  Layers,
+  Building2,
+  ShieldCheck,
+  Flame,
   Compass,
-  AlertCircle 
+  AlertCircle
 } from 'lucide-react';
 import { mockHospitals } from '../data/mockData';
 
-export default function MockMap({ 
-  selectedHospitalId = null, 
+export default function MockMap({
+  selectedHospitalId = null,
   onSelectHospital = null,
-  patientLocation = { city: "Dehradun", state: "Uttarakhand", address: "Rajpur Road, Dehradun" } 
+  patientLocation = { city: "Dehradun", state: "Uttarakhand", address: "Rajpur Road, Dehradun" }
 }) {
   const [showTraffic, setShowTraffic] = useState(true);
   const [showRadius, setShowRadius] = useState(true);
@@ -27,7 +27,7 @@ export default function MockMap({
     { id: "hosp-max-ddn", x: 490, y: 80, name: "Max Super Speciality", eta: "11 min", dist: "4.2 km", color: "#dc2626" },
     { id: "hosp-synergy", x: 220, y: 150, name: "Synergy Institute", eta: "14 min", dist: "6.1 km", color: "#0284c7" },
     { id: "hosp-cmi", x: 470, y: 320, name: "CMI Hospital", eta: "16 min", dist: "5.4 km", color: "#059669" },
-    { id: "hosp-aiims-rishikesh", x: 290, y: 350, name: "Doon Medical College", eta: "19 min", dist: "8.4 km", color: "#d97706" }
+    { id: "hosp-gdmc-ddn", x: 290, y: 350, name: "Doon Medical College", eta: "19 min", dist: "8.4 km", color: "#d97706" }
   ];
 
   const selectedPin = hospitalPins.find(p => p.id === selectedHospitalId);
@@ -113,8 +113,8 @@ export default function MockMap({
 
       {/* SVG Mock Map Canvas */}
       <div style={{ position: 'relative', width: '100%', height: '320px', background: '#0b1329', overflow: 'hidden' }}>
-        <svg 
-          viewBox="0 0 800 400" 
+        <svg
+          viewBox="0 0 800 400"
           style={{ width: '100%', height: '100%', display: 'block' }}
           preserveAspectRatio="xMidYMid slice"
         >
@@ -155,7 +155,7 @@ export default function MockMap({
 
           {/* Canal Road bypass */}
           <path d="M 440,150 L 320,130 L 220,150 L 170,230" stroke="#2a3b61" strokeWidth="5" fill="none" />
-          
+
           {/* Ring road loop */}
           <path d="M 170,230 L 220,320 L 350,350 L 490,340 L 580,260" stroke="#223354" strokeWidth="4" strokeDasharray="6 4" fill="none" />
 
@@ -167,7 +167,7 @@ export default function MockMap({
             <>
               {/* Green Corridor (Rajpur Rd to Max Hospital) */}
               <path d="M 390,220 L 440,150 L 490,80" stroke="#10b981" strokeWidth="4" strokeLinecap="round" fill="none" opacity="0.85" />
-              
+
               {/* Low Traffic path (Canal Rd) */}
               <path d="M 390,220 L 290,190 L 220,150" stroke="#10b981" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.75" />
 
@@ -181,10 +181,10 @@ export default function MockMap({
 
           {/* Highlighted active route if hospital selected */}
           {selectedPin && (
-            <path 
+            <path
               d={`M ${patientCoords.x},${patientCoords.y} Q ${(patientCoords.x + selectedPin.x) / 2},${(patientCoords.y + selectedPin.y) / 2 - 20} ${selectedPin.x},${selectedPin.y}`}
-              stroke="url(#routeGrad)" 
-              strokeWidth="5" 
+              stroke="url(#routeGrad)"
+              strokeWidth="5"
               strokeDasharray="8 4"
               fill="none"
               filter="url(#glow)"
@@ -195,8 +195,8 @@ export default function MockMap({
           {hospitalPins.map((hosp) => {
             const isTarget = hosp.id === selectedHospitalId;
             return (
-              <g 
-                key={hosp.id} 
+              <g
+                key={hosp.id}
                 transform={`translate(${hosp.x}, ${hosp.y})`}
                 style={{ cursor: onSelectHospital ? 'pointer' : 'default' }}
                 onClick={() => onSelectHospital && onSelectHospital(hosp.id)}
@@ -210,39 +210,39 @@ export default function MockMap({
                 )}
 
                 {/* Hospital base pin */}
-                <rect 
-                  x="-16" 
-                  y="-16" 
-                  width="32" 
-                  height="32" 
-                  rx="8" 
-                  fill={isTarget ? "#0284c7" : "#1e293b"} 
-                  stroke={isTarget ? "#ffffff" : "#475569"} 
-                  strokeWidth={isTarget ? "2.5" : "1.5"} 
+                <rect
+                  x="-16"
+                  y="-16"
+                  width="32"
+                  height="32"
+                  rx="8"
+                  fill={isTarget ? "#0284c7" : "#1e293b"}
+                  stroke={isTarget ? "#ffffff" : "#475569"}
+                  strokeWidth={isTarget ? "2.5" : "1.5"}
                 />
-                
+
                 {/* Red cross icon */}
                 <path d="M -7,0 L 7,0 M 0,-7 L 0,7" stroke="#ef4444" strokeWidth="3" strokeLinecap="round" />
 
                 {/* Tag label */}
-                <rect 
-                  x="-55" 
-                  y="20" 
-                  width="110" 
-                  height="22" 
-                  rx="5" 
-                  fill="#0f172a" 
-                  stroke={isTarget ? "#38bdf8" : "#334155"} 
-                  strokeWidth="1" 
+                <rect
+                  x="-55"
+                  y="20"
+                  width="110"
+                  height="22"
+                  rx="5"
+                  fill="#0f172a"
+                  stroke={isTarget ? "#38bdf8" : "#334155"}
+                  strokeWidth="1"
                   opacity="0.95"
                 />
-                <text 
-                  x="0" 
-                  y="34" 
-                  fill="#ffffff" 
-                  fontSize="9.5" 
-                  fontWeight="700" 
-                  textAnchor="middle" 
+                <text
+                  x="0"
+                  y="34"
+                  fill="#ffffff"
+                  fontSize="9.5"
+                  fontWeight="700"
+                  textAnchor="middle"
                   fontFamily="sans-serif"
                 >
                   {hosp.name.split(" ")[0]} • {hosp.eta}
@@ -263,24 +263,24 @@ export default function MockMap({
             <circle r="10" fill="#dc2626" stroke="#ffffff" strokeWidth="2.5" />
 
             {/* Patient callout card */}
-            <rect 
-              x="-65" 
-              y="-42" 
-              width="130" 
-              height="26" 
-              rx="6" 
-              fill="#dc2626" 
-              stroke="#ffffff" 
-              strokeWidth="1.5" 
+            <rect
+              x="-65"
+              y="-42"
+              width="130"
+              height="26"
+              rx="6"
+              fill="#dc2626"
+              stroke="#ffffff"
+              strokeWidth="1.5"
               filter="url(#glow)"
             />
-            <text 
-              x="0" 
-              y="-25" 
-              fill="#ffffff" 
-              fontSize="10" 
-              fontWeight="800" 
-              textAnchor="middle" 
+            <text
+              x="0"
+              y="-25"
+              fill="#ffffff"
+              fontSize="10"
+              fontWeight="800"
+              textAnchor="middle"
               fontFamily="sans-serif"
             >
               📍 YOUR LOCATION
