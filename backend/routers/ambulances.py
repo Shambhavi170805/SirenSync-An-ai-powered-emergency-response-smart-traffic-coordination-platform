@@ -1,0 +1,278 @@
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from backend.database.session import get_db
+from backend.models.ambulance import Ambulance
+from backend.models.enums import AmbulanceStatusEnum, AmbulanceTypeEnum
+from backend.schemas.ambulance import (
+    AmbulanceDetailResponse,
+    AmbulanceDispatchInfo,
+    LocationUpdateRequest,
+    RouteProgressUpdateRequest,
+    StatusTransitionRequest,
+)
+from backend.shared.contracts import RerouteEventContract
+from backend.services.ambulance_service import AmbulanceDispatchService
+from backend.services.tracking_service import tracking_hub
+from backend.models.emergency import Emergency
+from backend.models.hospital import Hospital
+from backend.services.traffic_provider import GoogleRoutesTrafficProvider
+import os
+
+router = APIRouter(prefix="/ambulances", tags=["Ambulance Fleet & Telemetry"])
+
+@router.get("", response_model=List[AmbulanceDetailResponse])
+def list_ambulances(
+    status_filter: Optional[AmbulanceStatusEnum] = None,
+    type_filter: Optional[AmbulanceTypeEnum] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Returns list of all ambulances in the fleet, optionally filtered by status or vehicle type.
+    """
+    query = db.query(Ambulance)
+    if status_filter:
+        query = query.filter(Ambulance.status == status_filter)
+    if type_filter:
+        query = query.filter(Ambulance.ambulance_type == type_filter)
+
+    ambulances = query.order_by(Ambulance.id.asc()).all()
+    return [AmbulanceDispatchService._to_detail_response(a) for a in ambulances]
+
+@router.get("/{ambulance_id}", response_model=AmbulanceDetailResponse)
+def get_ambulance_details(ambulance_id: str, db: Session = Depends(get_db)):
+    """
+    Returns complete details of a specific ambulance.
+    """
+    ambulance = db.query(Ambulance).filter(Ambulance.id == ambulance_id).first()
+    if not ambulance:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Ambulance '{ambulance_id}' not found."
+        )
+    return AmbulanceDispatchService._to_detail_response(ambulance)
+
+@router.get("/by-emergency/{emergency_id}", response_model=AmbulanceDetailResponse)
+def get_ambulance_by_emergency(emergency_id: str, db: Session = Depends(get_db)):
+    """
+    Returns the ambulance currently assigned to a specific emergency ID.
+    """
+    ambulance = db.query(Ambulance).filter(Ambulance.assigned_emergency_id == emergency_id).first()
+    if not ambulance:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No ambulance is currently assigned to emergency '{emergency_id}'."
+        )
+    return AmbulanceDispatchService._to_detail_response(ambulance)
+
+@router.post("/{ambulance_id}/location", response_model=AmbulanceDetailResponse)
+async def update_ambulance_location(
+    ambulance_id: str,
+    payload: LocationUpdateRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Ingests live or simulated GPS coordinates for an ambulance.
+    Explicitly flags simulated coordinates for prototype transparency.
+    """
+    try:
+        updated_amb = AmbulanceDispatchService.update_location(
+            db=db,
+            ambulance_id=ambulance_id,
+            latitude=payload.latitude,
+            longitude=payload.longitude,
+            address=payload.address,
+            is_simulated=payload.isSimulated,
+            timestamp=payload.timestamp,
+            route_progress=payload.routeProgress
+        )
+
+        # Broadcast real-time location update to WebSocket listeners
+        await tracking_hub.broadcast_event(
+            event_type="LOCATION_UPDATE",
+            payload={
+                "ambulanceId": updated_amb.id,
+                "emergencyId": updated_amb.assigned_emergency_id,
+                "latitude": updated_amb.current_latitude,
+                "longitude": updated_amb.current_longitude,
+                "address": updated_amb.current_address,
+                "isSimulated": updated_amb.is_simulated,
+                "routeProgress": updated_amb.route_progress,
+                "status": updated_amb.status.value,
+                "timestamp": updated_amb.updated_at.isoformat()
+            },
+            emergency_id=updated_amb.assigned_emergency_id
+        )
+
+        return AmbulanceDispatchService._to_detail_response(updated_amb)
+
+    except KeyError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+@router.post("/{ambulance_id}/progress", response_model=AmbulanceDetailResponse)
+async def update_ambulance_route_progress(
+    ambulance_id: str,
+    payload: RouteProgressUpdateRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Updates route progress percentage (0.0 to 100.0).
+    Guards against backward movement and synchronizes with HospitalQueueItem for the 40% reassignment policy.
+    """
+    try:
+        updated_amb = AmbulanceDispatchService.update_route_progress(
+            db=db,
+            ambulance_id=ambulance_id,
+            route_progress=payload.routeProgress,
+            is_simulated=payload.isSimulated,
+            emergency_id=payload.emergencyId
+        )
+
+        # Broadcast route progress update to WebSocket listeners
+        await tracking_hub.broadcast_event(
+            event_type="ROUTE_PROGRESS_UPDATE",
+            payload={
+                "ambulanceId": updated_amb.id,
+                "emergencyId": updated_amb.assigned_emergency_id,
+                "routeProgress": updated_amb.route_progress,
+                "isSimulated": updated_amb.is_simulated,
+                "timestamp": updated_amb.updated_at.isoformat()
+            },
+            emergency_id=updated_amb.assigned_emergency_id
+        )
+
+        return AmbulanceDispatchService._to_detail_response(updated_amb)
+
+    except KeyError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.post("/{ambulance_id}/status", response_model=AmbulanceDetailResponse)
+async def update_ambulance_status(
+    ambulance_id: str,
+    payload: StatusTransitionRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Transitions ambulance status through its validated state machine.
+    Rejects illegal status leaps (e.g., AVAILABLE directly to ARRIVED).
+    """
+    try:
+        updated_amb = AmbulanceDispatchService.update_status(
+            db=db,
+            ambulance_id=ambulance_id,
+            new_status=payload.status,
+            notes=payload.notes
+        )
+
+        # Broadcast status transition to WebSocket listeners
+        await tracking_hub.broadcast_event(
+            event_type="STATUS_CHANGE",
+            payload={
+                "ambulanceId": updated_amb.id,
+                "emergencyId": updated_amb.assigned_emergency_id,
+                "status": updated_amb.status.value,
+                "notes": payload.notes,
+                "timestamp": updated_amb.updated_at.isoformat()
+            },
+            emergency_id=updated_amb.assigned_emergency_id
+        )
+
+        return AmbulanceDispatchService._to_detail_response(updated_amb)
+
+    except KeyError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/{ambulance_id}/route")
+async def get_ambulance_route(ambulance_id: str, db: Session = Depends(get_db)):
+    """Return a traffic-aware driving route for the assigned ambulance.
+
+    Route traffic is real only when GOOGLE_MAPS_API_KEY is configured. The
+    endpoint deliberately refuses to label straight-line fallback as live traffic.
+    """
+    ambulance = db.query(Ambulance).filter(Ambulance.id == ambulance_id).first()
+    if not ambulance:
+        raise HTTPException(status_code=404, detail=f"Ambulance '{ambulance_id}' not found.")
+    if not ambulance.assigned_emergency_id or not ambulance.destination_hospital_id:
+        raise HTTPException(status_code=409, detail="Ambulance has no active emergency destination.")
+    hospital = db.query(Hospital).filter(Hospital.id == ambulance.destination_hospital_id).first()
+    if not hospital:
+        raise HTTPException(status_code=404, detail="Assigned destination hospital was not found.")
+
+    api_key = os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
+    if not api_key:
+        raise HTTPException(status_code=503, detail="Live traffic routing is not configured. Set GOOGLE_MAPS_API_KEY and enable Routes API.")
+
+    try:
+        provider = GoogleRoutesTrafficProvider(api_key)
+        route = await provider.compute_route(
+            float(ambulance.current_latitude), float(ambulance.current_longitude),
+            float(hospital.latitude), float(hospital.longitude)
+        )
+        return {
+            "ambulanceId": ambulance.id,
+            "emergencyId": ambulance.assigned_emergency_id,
+            "destinationHospitalId": hospital.id,
+            "destinationHospitalName": hospital.name,
+            "destination": {"latitude": hospital.latitude, "longitude": hospital.longitude},
+            **route,
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Traffic route provider failed: {exc}")
+
+@router.post("/apply-reroute", response_model=Optional[AmbulanceDetailResponse])
+async def apply_reroute_event(
+    reroute_event: RerouteEventContract,
+    db: Session = Depends(get_db)
+):
+    """
+    Consumer endpoint for machine-readable BED_REASSIGNMENT_REROUTE events.
+    Updates the ambulance destination to newHospitalId and notifies tracking channels.
+    """
+    if not reroute_event.newHospitalId:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot apply reroute: newHospitalId is required."
+        )
+
+    try:
+        updated_amb = AmbulanceDispatchService.apply_reroute(
+            db=db,
+            reroute_event=reroute_event,
+            commit=False
+        )
+        if not updated_amb:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No active ambulance found for displaced emergency '{reroute_event.emergencyId}'."
+            )
+
+        # Build payload and response DTO before commit while updated_amb is unexpired
+        payload = AmbulanceDispatchService.build_reroute_payload(
+            reroute_event,
+            ambulance=updated_amb
+        )
+        response_dto = AmbulanceDispatchService._to_detail_response(updated_amb)
+
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise
+
+    # Broadcast reroute alert to subscribers strictly post-commit
+    await tracking_hub.broadcast_event(
+        event_type="REROUTE_ALERT",
+        payload=payload,
+        emergency_id=reroute_event.emergencyId
+    )
+
+    return response_dto

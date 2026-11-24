@@ -1,121 +1,100 @@
-# SirenSync: AI-Traffic / Green Corridor
+# SirenSync Unified Emergency Response Platform
 
-An AI-powered pre-emptive green corridor module for emergency vehicles, built with YOLOv10, EasyOCR and FastAPI.
+SirenSync connects the patient portal, hospital operations dashboard, and ambulance/driver console through one FastAPI backend and one shared operational database.
 
----
+## Integrated application
 
-## 🚀 How to Run
+- **Patient portal** (`frontend/patient/`): patient registration/login, emergency intake, capability-aware hospital ranking, hospital selection, bed reservation, and ambulance tracking.
+- **Hospital dashboard** (`frontend/hospital/`): hospital directory, bed inventory, reservations, the existing emergency priority queue, reassignment evaluation, and assigned ambulance/driver details.
+- **Driver console** (`frontend/driver/`): ambulance fleet, assignment view, lifecycle actions, simulated location/progress telemetry, and reroute notifications.
+- **Backend** (`backend/`): one FastAPI application, shared SQLAlchemy Base and operational session for emergencies, hospitals, beds, reservations, queue items, and ambulances.
 
-### 1. Create and Activate Virtual Environment
+## Database layout and preservation
+
+The application intentionally retains the two existing SQLite databases supplied with this project:
+
+1. `database/sirensync_hospital.db` is the **shared operational database** for hospitals, emergencies, beds, reservations, `hospital_queue_items`, reassignment audit records, and ambulances. Patient emergency records and ambulance assignments are joined by the same `emergency_id`.
+2. `database/sirensync.db` stores patient authentication records and sessions. It remains separate to preserve the existing patient-authentication implementation.
+3. `database/backups/` contains the supplied pre-Phase-1 operational backup. It is a backup only and is not used by the application.
+
+For compatibility with the existing Mac folder layout, database resolution first checks a sibling `database/` folder next to the repository. If that folder does not exist, it uses this repository's `database/` folder. Environment variables can override either path:
+
+- `HOSPITAL_DATABASE_URL`
+- `DATABASE_URL`
+
+Do not point the two URLs to the same SQLite file. Do not replace the operational database with the pre-Phase-1 backup.
+
+## Emergency lifecycle
+
+1. Patient creates an emergency. The API persists `requiredCapabilities` on the emergency record.
+2. Patient requests hospital ranking and selects a receiving hospital.
+3. The existing bed reservation service atomically reserves a suitable bed and updates the existing `HospitalQueueItem`.
+4. Ambulance dispatch runs after the bed reservation commits. It selects an available ambulance that satisfies required equipment constraints.
+5. If no eligible ambulance is available, the bed reservation remains intact and the same queue item records that ambulance dispatch is pending.
+6. Driver telemetry updates the ambulance record and the same queue item's route progress/status.
+7. Patient tracking and hospital queue views read ambulance data using the same emergency ID.
+8. Approved reroute events are applied within the existing reassignment transaction and broadcast after commit.
+
+There is no separate ambulance queue or duplicate emergency table.
+
+## Local setup (macOS)
+
+From the repository root:
+
 ```bash
-python -m venv venv
-
-# Windows PowerShell:
-.\venv\Scripts\Activate.ps1
-
-# Linux / macOS:
-source venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r backend/requirements.txt
 ```
 
-### 2. Install Dependencies
+Start the unified backend:
+
 ```bash
-pip install -r requirements.txt
+PYTHONPATH="$PWD/backend:$PWD" .venv/bin/uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-> **Note**: `easyocr` (~500 MB including PyTorch) will be downloaded on first install. It runs on CPU — no GPU required.
+Or use `backend/run.sh` after installing dependencies.
 
-### 3. Add Google Maps Key to `.env`
-Copy `.env.example` to `.env`:
+Open these backend-served interfaces:
+
+- Hospital operations: http://localhost:8000/dashboard/
+- Ambulance driver console: http://localhost:8000/driver/
+- API documentation: http://localhost:8000/docs
+
+Start the patient React/Vite portal in a second terminal:
+
 ```bash
-copy .env.example .env
-```
-Open `.env` and paste your key (optional &mdash; if omitted, an interactive vector map appears):
-```ini
-GOOGLE_MAPS_API_KEY=YOUR_API_KEY_HERE
-SIGNAL_CONTROLLER_TYPE=simulated
+cd frontend/patient
+npm install
+npm run dev -- --host 0.0.0.0
 ```
 
-### 4. Set Camera URLs in `config.yaml`
-By default, `url: "demo"` uses the built-in simulated traffic video. Replace with `"0"` for webcam or `"rtsp://..."` for an IP camera.
+Open http://localhost:5173. The Vite development server proxies `/api` requests to the unified backend on port 8000.
 
-### 5. Run the Server
+The patient frontend can be built with `npm run build` from `frontend/patient`. The hospital dashboard and driver console are served as static vanilla-JavaScript applications by FastAPI and do not require a separate build step.
+
+## Prototype and integration limitations
+
+- Ambulance GPS/location and route progress are explicitly marked as simulated in the driver console unless a real telemetry source is configured.
+- Traffic calculations use the configured provider (the default is deterministic mock traffic). This project does not claim real Google Maps live traffic ingestion or physical traffic-signal control.
+- The driver console is a demonstration interface, not a production driver-authentication system. Do not expose it publicly without adding authenticated driver authorization.
+- The 40% route-progress reassignment threshold is a configurable prototype rule, not a clinically validated policy.
+- Cloudflare Turnstile and other external integrations require appropriate environment configuration for production use.
+
+## Safety before using an existing local database
+
+Keep a separate backup before running the application against any local operational database. Startup applies idempotent schema migrations. The application does not automatically seed new fleet records during normal startup.
+
+## Live ambulance GPS and traffic-aware routing
+
+The driver dashboard uses the driver's device browser GPS (`navigator.geolocation.watchPosition`) and sends real coordinates only after the driver grants location permission. Open `/driver/` on the driver's phone over HTTPS (or `localhost` during local testing). Do not use a simulated desktop waypoint and describe it as live GPS.
+
+Traffic-aware road geometry and traffic duration are provided by Google Routes API when configured. Create a server-side API key in a billing-enabled Google Cloud project, enable Routes API, restrict the key to the Routes API, and set `GOOGLE_MAPS_API_KEY` in the backend process environment before starting Uvicorn. Example:
+
 ```bash
-uvicorn ai_traffic.main:app --reload
+export GOOGLE_MAPS_API_KEY="YOUR_SERVER_SIDE_KEY"
 ```
 
-### 6. Open Dashboard
-Open your browser at:
-👉 **http://localhost:8000**
+The key is read only by the backend and is never sent to the browser. Without this key, device GPS still works, but route progress falls back to a clearly labelled GPS distance estimate and the map does not claim live traffic.
 
----
-
-## 💡 How It Works (Explained in Simple English)
-
-The system clears traffic lights ahead of an approaching ambulance in 6 steps:
-
-1. **Camera**: A video stream from an intersection camera (or the built-in demo video loop) reads road traffic in real time.
-2. **YOLO Vehicle Detection**: YOLOv10 scans each frame and draws a bounding box around every vehicle.
-3. **ANPR (Automatic Number Plate Recognition)**: For each vehicle box, the system crops the lower portion (the plate area) and runs EasyOCR to read the plate text. The raw text is normalised (uppercase, symbols removed, common OCR confusions fixed) and compared against the **ambulance registry** (`sample_data/ambulance_registry.json`). An exact match is tried first; if that fails, a fuzzy match allowing 1 character difference is tried. A match in **2 consecutive reads within 2 seconds** confirms the ambulance — this is the **primary detection method**.
-4. **Beacon / Colour Backup**: If ANPR is unavailable or returns no match, the existing flashing red/blue beacon heuristic is tried as a backup. Custom YOLO ambulance weights (if supplied) are also used here.
-5. **Green Corridor**: Once confirmed, only the **next junction ahead** on the active route turns GREEN. When the ambulance crosses, the signal holds green briefly, shows amber, then returns to RED.
-6. **Dashboard**: A browser dashboard shows the live camera feed, signal states, real-time event log (including the matched plate and detection method), and a map with the ambulance marker.
-
----
-
-## 📁 File Jobs (One Sentence Each)
-
-- **`ai_traffic/main.py`**: Runs the FastAPI web server, WebSocket event stream, and in-memory event storage.
-- **`ai_traffic/camera.py`**: Captures frames from cameras or generates the synthetic demo traffic video (including a vehicle with a readable sample plate).
-- **`ai_traffic/detector.py`**: Runs YOLO, then ANPR (EasyOCR + plate matching), then falls back to the flashing beacon heuristic, confirming detections across consecutive frames.
-- **`ai_traffic/plates.py`**: Loads the ambulance registry, normalises plate text, and performs exact + fuzzy plate matching.
-- **`ai_traffic/signals.py`**: Controls junction traffic lights (RED → GREEN → HOLD → AMBER → RED) and provides signal adapters.
-- **`ai_traffic/route.py`**: Calculates Haversine distance from the ambulance to upcoming junctions and triggers the 200 m pre-emption.
-- **`config.yaml`**: Stores intersection locations, trigger distances, camera settings, ANPR confidence thresholds, and safety timeout values.
-- **`ai_traffic/static/index.html`**: The single-page dashboard displaying maps, live video, signal states, and event logs.
-- **`sample_data/ambulance_registry.json`**: Registry of authorised ambulance plates (plate, ambulance_id, operator, type, active flag).
-- **`sample_data/generate_plate_image.py`**: One-time script that generates a JPEG of a sample plate for testing OCR.
-- **`tests/test_core.py`**: Tests for signal transitions, the 200 m trigger, the health API, and ANPR plate normalisation / fuzzy matching.
-
----
-
-## 🔌 Integration
-
-### Connecting the Registry to the Ambulance Module's API
-
-The `load_registry()` function in `ai_traffic/plates.py` currently reads from a local JSON file. To connect it to your teammates' Ambulance Coordination module:
-
-1. Replace the body of `load_registry()` with an HTTP GET to the Ambulance module's endpoint, e.g.:
-   ```python
-   import requests
-   def load_registry():
-       resp = requests.get("http://ambulance-module/api/active-fleet")
-       return resp.json()
-   ```
-2. The JSON format must stay the same: a list of objects with `plate`, `ambulance_id`, `active`, etc.
-3. Set `only_dispatched_plate: true` in `config.yaml` to ensure only the ambulance currently assigned to the active route can trigger green.
-
-### Connecting a Real ANPR Camera Stream
-
-1. In `config.yaml`, change the camera `url` from `"demo"` to your RTSP stream:
-   ```yaml
-   url: "rtsp://user:pass@192.168.1.100:554/stream"
-   ```
-2. If the camera has a built-in ANPR output (many do), skip EasyOCR and call `match_plate()` directly with the camera's plate string.
-3. Adjust `anpr_confidence_threshold` in `config.yaml` to match your camera's OCR accuracy.
-
-### Other Integration Points
-
-- **Route Provider**: POST to `http://localhost:8000/route` with the ambulance ID and waypoint list.
-- **Real Signal Controller**: In `.env`, set `SIGNAL_CONTROLLER_TYPE=real`. Requires Smart City Traffic Police hardware clearance.
-- **Event Consumers**: Connect to `ws://localhost:8000/ws/events` to receive `AMBULANCE_DETECTED` and `SIGNAL_CHANGED` JSON notifications (plate, ambulance_id, method, confidence, camera_id, junction_id, timestamp).
-
----
-
-## ⚠️ Limitations
-
-- **No Government Vahan Database Access**: The ambulance registry is the platform's own local JSON list (or an API you configure). It has no connection to the national Vahan vehicle database or MoRTH records.
-- **OCR Accuracy Drops in Hard Conditions**: EasyOCR accuracy is significantly reduced at night, with motion blur, sharp angles, rain/glare, or dirty, damaged, or non-standard (fancy font) plates.
-- **No Real Signal Control**: Physical signal pre-emption requires municipal Traffic Police authorization and certified hardware controller access.
-- **No Government Camera Access**: Uses simulated video or user-provided RTSP streams; no access to government CCTV or ANPR infrastructure.
-- **Default YOLO COCO Classes**: Standard COCO models have no `ambulance` class; the beacon/colour heuristic is the YOLO-based fallback unless custom fine-tuned weights are supplied.
-- **Registry Must Be Kept Current**: If an ambulance's plate changes or it is decommissioned, the registry must be updated manually (or the API must reflect it); stale entries can cause false positives or missed detections.
+Ambulance dispatch retries every 10 seconds for reserved emergencies still in the existing `hospital_queue_items` coordination state. After two minutes without an eligible vehicle, the existing queue item is marked for hospital-desk escalation while retries continue. Hospital facility capabilities (such as a cardiac cath lab or stroke unit) are not treated as ambulance equipment; explicit equipment requirements such as an ICU ventilator remain hard eligibility filters.
